@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <script>
+      (function () {
+        try {
+          var k = "msgprocessor-theme";
+          var v = localStorage.getItem(k);
+          var sys = window.matchMedia("(prefers-color-scheme: light)").matches;
+          var light = v === "light" || (v !== "dark" && (v === "system" || !v) && sys);
+          document.documentElement.setAttribute("data-theme", light ? "light" : "dark");
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="MsgProcessor AstrBot 插件：可视化编辑入站消息文本处理规则（rules.json）" />
+    <title>MsgProcessor</title>
+    <script type="module" crossorigin src="/assets/index-kipFx93B.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BF3RjSeN.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

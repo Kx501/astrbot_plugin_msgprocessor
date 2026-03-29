@@ -1,0 +1,66 @@
+{
+  "schema_version": 4,
+  "rules": [
+    {
+      "id": "inside_brackets",
+      "enabled": true,
+      "priority": 10,
+      "limits": { "max_matches": 8 },
+      "steps": [
+        {
+          "id": "match_block",
+          "config": {
+            "matcher": {
+              "type": "anchor_slice",
+              "start": { "literal": "【", "occurrence": 0, "inclusive": false },
+              "end": { "literal": "】", "occurrence": 0, "inclusive": false }
+            },
+            "region": { "kind": "match" },
+            "steps": [
+              { "id": "translate_stub", "config": { "prefix": "[译]" } },
+              { "id": "append", "config": { "text": "◆" } }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "whole_message_passthrough",
+      "enabled": false,
+      "priority": 8,
+      "limits": { "max_matches": 1 },
+      "steps": [
+        {
+          "id": "match_block",
+          "config": {
+            "matcher": { "type": "passthrough" },
+            "region": { "kind": "match" },
+            "steps": [{ "id": "translate_stub", "config": { "prefix": "[整段]" } }]
+          }
+        }
+      ]
+    },
+    {
+      "id": "simple_prefix",
+      "enabled": true,
+      "priority": 5,
+      "steps": [
+        {
+          "id": "match_block",
+          "config": {
+            "matcher": {
+              "type": "simple",
+              "op": "startswith",
+              "value": "/echo ",
+              "ignore_case": false
+            },
+            "region": { "kind": "match" },
+            "steps": [
+              { "id": "replace", "config": { "from": "/echo ", "to": "ECHO:" } }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
