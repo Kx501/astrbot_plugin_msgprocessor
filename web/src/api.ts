@@ -1,6 +1,5 @@
-import type { RulesDocumentWire } from "./types";
+import type { RulesDocumentUI, RulesDocumentWire } from "./types";
 import { uiToWire } from "./types";
-import type { RulesDocumentUI } from "./types";
 
 async function errBody(r: Response): Promise<string> {
   const t = await r.text();

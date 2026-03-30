@@ -50,18 +50,7 @@ def create_app(
     wd = (web_dist if web_dist is not None else _DEFAULT_WEB_DIST).resolve()
     dd.mkdir(parents=True, exist_ok=True)
 
-    def _read_rules_file(fname: str) -> dict:
-        base = Path(fname).name
-        fname2 = base if base.endswith(".json") else f"{base}.json"
-        p = (dd / fname2).resolve()
-        if p.is_file() and p.parent == dd:
-            with open(p, "r", encoding="utf-8") as f:
-                return json.load(f)
-        if fname2 == "rules.json":
-            return _load_sample_rules()
-        raise HTTPException(404, f"missing {fname2}")
-
-    def _read_any_or_sample(name: str) -> dict:
+    def _read_rules_json(name: str) -> dict:
         base = Path(name).name
         fname2 = base if base.endswith(".json") else f"{base}.json"
         p = (dd / fname2).resolve()
@@ -88,7 +77,7 @@ def create_app(
 
     @app.get("/api/rules/{name}")
     def get_rules(name: str) -> dict:
-        return _read_any_or_sample(name)
+        return _read_rules_json(name)
 
     @app.post("/api/rules/{name}")
     def save_rules(name: str, body: RulesDocument) -> dict:
@@ -108,7 +97,7 @@ def create_app(
             if body.rules is not None:
                 doc = body.rules
             else:
-                doc = _read_rules_file("rules.json")
+                doc = _read_rules_json("rules.json")
             out = process_text(doc, body.message, meta={})
         except HTTPException:
             raise

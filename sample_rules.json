@@ -17,7 +17,7 @@
             },
             "region": { "kind": "match" },
             "steps": [
-              { "id": "translate_stub", "config": { "prefix": "[译]" } },
+              { "id": "prepend", "config": { "prefix": "[译]" } },
               { "id": "append", "config": { "text": "◆" } }
             ]
           }
@@ -35,7 +35,7 @@
           "config": {
             "matcher": { "type": "passthrough" },
             "region": { "kind": "match" },
-            "steps": [{ "id": "translate_stub", "config": { "prefix": "[整段]" } }]
+            "steps": [{ "id": "prepend", "config": { "prefix": "[整段]" } }]
           }
         }
       ]

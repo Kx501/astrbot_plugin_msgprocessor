@@ -20,7 +20,7 @@ class Span:
 
 @dataclass
 class MatchHit:
-    """主匹配在窗口内的一次命中（region 为 apply_hits 内层模块处理的片段）。"""
+    """主匹配的一次命中；``region_text`` 为内层模块处理的命中段。"""
 
     span: Span
     region_span: Span
@@ -38,4 +38,5 @@ class ProcessingContext:
 @dataclass
 class ModuleResult:
     text: str
+    # 为 True 时不采纳本步的 text，保持进入本步前的命中段并继续执行后续模块
     skip_rule: bool = False

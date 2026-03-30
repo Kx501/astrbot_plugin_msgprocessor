@@ -15,8 +15,9 @@ from astrbot.api import logger as ab_logger
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star, StarTools, register
 
-from .core.engine import process_text
+from .core.engine import process_text_async
 from .core.loader import load_rules_from_path
+from .core.modules import translate_llm_fallback
 from .core.server import create_app
 
 _PLUGIN_ROOT = Path(__file__).resolve().parent
@@ -31,6 +32,9 @@ def _default_plugin_config() -> dict[str, Any]:
         "web_host": "127.0.0.1",
         "web_port": 5878,
         "process_messages": True,
+        "llm_translate_enabled": False,
+        "llm_translate_default_lang": "英文",
+        "llm_translate_prompt_suffix": "",
     }
 
 
@@ -60,6 +64,14 @@ def _load_plugin_config(data_dir: Path) -> dict[str, Any]:
             pass
     if "process_messages" in raw:
         base["process_messages"] = bool(raw["process_messages"])
+    if "llm_translate_enabled" in raw:
+        base["llm_translate_enabled"] = bool(raw["llm_translate_enabled"])
+    if isinstance(raw.get("llm_translate_default_lang"), str):
+        v = raw["llm_translate_default_lang"].strip()
+        if v:
+            base["llm_translate_default_lang"] = v
+    if isinstance(raw.get("llm_translate_prompt_suffix"), str):
+        base["llm_translate_prompt_suffix"] = raw["llm_translate_prompt_suffix"]
     return base
 
 
@@ -137,6 +149,32 @@ class MsgProcessorStar(Star):
                 await asyncio.to_thread(th.join, 3.0)
         ab_logger.info("MsgProcessor 已停止")
 
+    def _translate_llm_handler(self, event: AstrMessageEvent):
+        """供规则引擎 meta 注入；内部使用 AstrBot 的 llm_generate（需框架 ≥ 4.5.7）。"""
+
+        cfg_star = self._cfg
+        ctx_ab = self.context
+
+        async def translate_llm(text: str, scfg: dict[str, Any], _pctx: Any, _hit: Any) -> str:
+            if not cfg_star.get("llm_translate_enabled", False):
+                return translate_llm_fallback(text, scfg)
+            target = str(scfg.get("target_lang") or cfg_star.get("llm_translate_default_lang") or "英文").strip()
+            suffix = str(cfg_star.get("llm_translate_prompt_suffix") or "").strip()
+            prompt = f"请将以下文本翻译成{target}，只输出译文，不要解释：\n\n{text}"
+            if suffix:
+                prompt = f"{prompt}\n\n{suffix}"
+            try:
+                umo = event.unified_msg_origin
+                pid = await ctx_ab.get_current_chat_provider_id(umo=umo)
+                resp = await ctx_ab.llm_generate(chat_provider_id=pid, prompt=prompt)
+                out = (getattr(resp, "completion_text", None) or "").strip()
+                return out if out else translate_llm_fallback(text, scfg)
+            except Exception:
+                ab_logger.exception("MsgProcessor: AI翻译失败")
+                return translate_llm_fallback(text, scfg)
+
+        return translate_llm
+
     @filter.event_message_type(
         filter.EventMessageType.GROUP_MESSAGE | filter.EventMessageType.PRIVATE_MESSAGE,
         priority=12,
@@ -149,9 +187,10 @@ class MsgProcessorStar(Star):
             return
         try:
             doc = self._load_rules_doc()
-            out = process_text(doc, raw, meta={})
+            meta = {"translate_llm": self._translate_llm_handler(event)}
+            out = await process_text_async(doc, raw, meta=meta)
         except Exception:
-            ab_logger.exception("MsgProcessor: process_text 异常")
+            ab_logger.exception("MsgProcessor: process_text_async 异常")
             return
         if out != raw:
             event.message_str = out

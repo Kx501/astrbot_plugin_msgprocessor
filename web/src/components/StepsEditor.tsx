@@ -155,64 +155,60 @@ function MatchPrimaryBody({
         <div className="match-matcher-head">{matcherTypeSelect}</div>
       )}
       {mtype === "regex" ? (
-        <>
-          <div className="form-grid-regex">
-            <label className="field-stack span-cols-2">
-              <span className="label-text">{UI.fieldPattern}</span>
-              <input
-                value={String(matcher.pattern ?? "")}
-                onChange={(e) => setMatcher({ ...matcher, pattern: e.target.value })}
-              />
-            </label>
-            <label className="field-stack span-cols-2">
-              <span className="label-text">{UI.fieldFlags}</span>
-              <input
-                placeholder="例如：IGNORECASE"
-                value={((matcher.flags as string[] | undefined) ?? []).join(", ")}
-                onChange={(e) => {
-                  const flags = e.target.value
-                    .split(/[,，]/)
-                    .map((s) => s.trim())
-                    .filter(Boolean);
-                  setMatcher({ ...matcher, flags });
-                }}
-              />
-            </label>
-          </div>
-        </>
+        <div className="form-grid-regex">
+          <label className="field-stack span-cols-2">
+            <span className="label-text">{UI.fieldPattern}</span>
+            <input
+              value={String(matcher.pattern ?? "")}
+              onChange={(e) => setMatcher({ ...matcher, pattern: e.target.value })}
+            />
+          </label>
+          <label className="field-stack span-cols-2">
+            <span className="label-text">{UI.fieldFlags}</span>
+            <input
+              placeholder="例如：IGNORECASE"
+              value={((matcher.flags as string[] | undefined) ?? []).join(", ")}
+              onChange={(e) => {
+                const flags = e.target.value
+                  .split(/[,，]/)
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                setMatcher({ ...matcher, flags });
+              }}
+            />
+          </label>
+        </div>
       ) : null}
       {mtype === "simple" ? (
-        <>
-          <div className="form-grid-matcher-simple">
-            <label className="field-stack">
-              <span className="label-text">{UI.fieldOp}</span>
-              <select
-                value={String(matcher.op ?? "contains")}
-                onChange={(e) => setMatcher({ ...matcher, op: e.target.value })}
-              >
-                <option value="equals">{UI.opEquals}</option>
-                <option value="contains">{UI.opContains}</option>
-                <option value="startswith">{UI.opStarts}</option>
-                <option value="endswith">{UI.opEnds}</option>
-              </select>
-            </label>
-            <label className="field-stack">
-              <span className="label-text">{UI.fieldValue}</span>
-              <input
-                value={String(matcher.value ?? "")}
-                onChange={(e) => setMatcher({ ...matcher, value: e.target.value })}
-              />
-            </label>
-            <label className="field-inline-check field-inline-check--align-input">
-              <input
-                type="checkbox"
-                checked={Boolean(matcher.ignore_case)}
-                onChange={(e) => setMatcher({ ...matcher, ignore_case: e.target.checked })}
-              />
-              <span>{UI.fieldIgnoreCase}</span>
-            </label>
-          </div>
-        </>
+        <div className="form-grid-matcher-simple">
+          <label className="field-stack">
+            <span className="label-text">{UI.fieldOp}</span>
+            <select
+              value={String(matcher.op ?? "contains")}
+              onChange={(e) => setMatcher({ ...matcher, op: e.target.value })}
+            >
+              <option value="equals">{UI.opEquals}</option>
+              <option value="contains">{UI.opContains}</option>
+              <option value="startswith">{UI.opStarts}</option>
+              <option value="endswith">{UI.opEnds}</option>
+            </select>
+          </label>
+          <label className="field-stack">
+            <span className="label-text">{UI.fieldValue}</span>
+            <input
+              value={String(matcher.value ?? "")}
+              onChange={(e) => setMatcher({ ...matcher, value: e.target.value })}
+            />
+          </label>
+          <label className="field-inline-check field-inline-check--align-input">
+            <input
+              type="checkbox"
+              checked={Boolean(matcher.ignore_case)}
+              onChange={(e) => setMatcher({ ...matcher, ignore_case: e.target.checked })}
+            />
+            <span>{UI.fieldIgnoreCase}</span>
+          </label>
+        </div>
       ) : null}
 
       <div className="form-grid-region step-match-region">

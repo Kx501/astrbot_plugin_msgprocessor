@@ -316,6 +316,11 @@ code,
   margin-bottom: 0.65rem;
 }
 
+/* 规则步骤：首段说明在 .steps-editor 内，不受 fieldset-body > :first-child 去顶距影响；收紧 .section-desc 默认上边距 */
+.steps-editor > .pipeline-intro.section-desc {
+  margin-top: 0rem;
+}
+
 .test-bench-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -617,10 +622,6 @@ textarea {
     grid-template-columns: 1fr;
     align-items: stretch;
   }
-}
-
-.window-on-missing {
-  margin-top: 0.65rem;
 }
 
 .step-nested-title {
@@ -969,6 +970,12 @@ textarea {
   .pipeline-config-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.pipeline-config-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
 }
 
 .app-footer {

@@ -4,11 +4,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from .steps import RuleExecContext, normalize_rule_steps, run_rule_steps
+from .steps import RuleExecContext, normalize_rule_steps, run_rule_steps, run_rule_steps_async
 
 
 def process_text(rules_doc: dict[str, Any], message: str, *, meta: dict[str, Any] | None = None) -> str:
     return process_with_rules(rules_doc, message, meta=meta or {})
+
+
+async def process_text_async(
+    rules_doc: dict[str, Any],
+    message: str,
+    *,
+    meta: dict[str, Any] | None = None,
+) -> str:
+    return await process_with_rules_async(rules_doc, message, meta=meta or {})
 
 
 def _sort_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -41,6 +50,23 @@ def _apply_rule(message: str, rule: dict[str, Any], meta: dict[str, Any]) -> str
     return ctx.message
 
 
+async def _apply_rule_async(message: str, rule: dict[str, Any], meta: dict[str, Any]) -> str:
+    if not rule.get("enabled", True):
+        return message
+
+    rid = str(rule.get("id", ""))
+    steps = normalize_rule_steps(rule)
+    ctx = RuleExecContext(
+        message=message,
+        rule_id=rid,
+        meta=dict(meta),
+        limits=rule.get("limits") if isinstance(rule.get("limits"), dict) else {},
+        stop_rule=False,
+    )
+    await run_rule_steps_async(ctx, steps)
+    return ctx.message
+
+
 def process_with_rules(rules_doc: dict[str, Any], message: str, *, meta: dict[str, Any]) -> str:
     rules = rules_doc.get("rules")
     if not isinstance(rules, list):
@@ -48,4 +74,14 @@ def process_with_rules(rules_doc: dict[str, Any], message: str, *, meta: dict[st
     out = message
     for rule in _sort_rules([r for r in rules if isinstance(r, dict)]):
         out = _apply_rule(out, rule, meta)
+    return out
+
+
+async def process_with_rules_async(rules_doc: dict[str, Any], message: str, *, meta: dict[str, Any]) -> str:
+    rules = rules_doc.get("rules")
+    if not isinstance(rules, list):
+        return message
+    out = message
+    for rule in _sort_rules([r for r in rules if isinstance(r, dict)]):
+        out = await _apply_rule_async(out, rule, meta)
     return out

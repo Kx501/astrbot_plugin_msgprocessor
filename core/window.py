@@ -40,18 +40,11 @@ def _anchor_edge(
         return None
     occ = int(spec.get("occurrence", 0))
     inclusive = bool(spec.get("inclusive", False))
-    if search_to is None:
-        sub = message[search_from:]
-        rel = _find_nth(sub, lit, occ, 0)
-        if rel is None:
-            return None
-        idx = search_from + rel
-    else:
-        sub = message[search_from:search_to]
-        rel = _find_nth(sub, lit, occ, 0)
-        if rel is None:
-            return None
-        idx = search_from + rel
+    sub = message[search_from:] if search_to is None else message[search_from:search_to]
+    rel = _find_nth(sub, lit, occ, 0)
+    if rel is None:
+        return None
+    idx = search_from + rel
     ln = len(lit)
     if is_start:
         return idx if inclusive else idx + ln

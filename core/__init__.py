@@ -6,9 +6,9 @@
 """
 from __future__ import annotations
 
-from .engine import process_text
+from .engine import process_text, process_text_async
 from .loader import load_rules_from_path
 
-__all__ = ["process_text", "load_rules_from_path", "__version__"]
+__all__ = ["process_text", "process_text_async", "load_rules_from_path", "__version__"]
 
 __version__ = "0.1.0"

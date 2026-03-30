@@ -10,6 +10,12 @@ from .models import MatchHit, Span
 from .window import resolve_window
 
 
+def _match_hit_plain(slice_text: str, rs: int, re_: int, global_offset: int) -> MatchHit:
+    lo, hi = global_offset + rs, global_offset + re_
+    sp = Span(lo, hi)
+    return MatchHit(span=sp, region_span=sp, region_text=slice_text[rs:re_], groups=())
+
+
 def _parse_flags(names: list[str] | None) -> int:
     if not names:
         return 0
@@ -42,19 +48,11 @@ def find_hits_regex(
         if len(hits) >= max_matches:
             break
         kind = (region_cfg or {}).get("kind", "match")
-        if kind == "match":
-            rs, re_ = m.span()
-        elif kind == "group":
+        if kind == "group":
             g = (region_cfg or {}).get("index")
             if g is None:
                 g = (region_cfg or {}).get("name")
-            if isinstance(g, int):
-                span_t = m.span(g)
-            elif isinstance(g, str):
-                span_t = m.span(g)
-            else:
-                span_t = m.span()
-            rs, re_ = span_t
+            rs, re_ = m.span(g) if isinstance(g, (int, str)) else m.span()
         else:
             rs, re_ = m.span()
         rel = Span(rs, re_)
@@ -90,15 +88,7 @@ def find_hits_simple(
     def add(rs: int, re_: int) -> None:
         if len(hits) >= max_matches:
             return
-        glob = Span(global_offset + rs, global_offset + re_)
-        hits.append(
-            MatchHit(
-                span=glob,
-                region_span=glob,
-                region_text=slice_text[rs:re_],
-                groups=(),
-            )
-        )
+        hits.append(_match_hit_plain(slice_text, rs, re_, global_offset))
 
     if op == "equals":
         if hay == needle:
@@ -139,15 +129,7 @@ def find_hits_passthrough(
         return []
     if max_matches < 1:
         return []
-    glob = Span(global_offset, global_offset + n)
-    return [
-        MatchHit(
-            span=glob,
-            region_span=glob,
-            region_text=slice_text,
-            groups=(),
-        )
-    ]
+    return [_match_hit_plain(slice_text, 0, n, global_offset)]
 
 
 def find_hits_anchor_slice(
@@ -162,20 +144,9 @@ def find_hits_anchor_slice(
     if wspan is None:
         return []
     wstart, wend = wspan.start, wspan.end
-    inner = slice_text[wstart:wend]
-    if len(inner) == 0:
+    if wstart >= wend or max_matches < 1:
         return []
-    if max_matches < 1:
-        return []
-    glob = Span(global_offset + wstart, global_offset + wend)
-    return [
-        MatchHit(
-            span=glob,
-            region_span=glob,
-            region_text=inner,
-            groups=(),
-        )
-    ]
+    return [_match_hit_plain(slice_text, wstart, wend, global_offset)]
 
 
 def find_hits(
