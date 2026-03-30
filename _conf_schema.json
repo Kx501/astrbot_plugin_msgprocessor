@@ -1,38 +1,37 @@
 {
-  "type": "object",
-  "properties": {
-    "web_enabled": {
-      "type": "boolean",
-      "title": "启用本插件的 Web 配置台",
-      "description": "在数据目录旁启动静态页与规则接口，便于浏览器编辑 rules.json。"
-    },
-    "web_host": {
-      "type": "string",
-      "title": "Web 监听地址"
-    },
-    "web_port": {
-      "type": "integer",
-      "title": "Web 端口"
-    },
-    "process_messages": {
-      "type": "boolean",
-      "title": "处理入站纯文本",
-      "description": "关闭后仅保留 Web 配置台，不改写 message_str。"
-    },
-    "llm_translate_enabled": {
-      "type": "boolean",
-      "title": "允许 AI翻译步骤调用聊天模型",
-      "description": "开启后，规则中的「AI翻译」步骤可调用 AstrBot 当前会话绑定的聊天模型；选用哪家模型在 AstrBot 主界面配置，此处不重复选择。"
-    },
-    "llm_translate_default_lang": {
-      "type": "string",
-      "title": "默认译向语言说明",
-      "description": "写入给模型的自然语言说明，如「英文」「日文」；单条规则步骤里可再填目标语言覆盖此项。"
-    },
-    "llm_translate_prompt_suffix": {
-      "type": "string",
-      "title": "翻译提示附加说明",
-      "description": "可选，拼在每次翻译请求末尾。"
-    }
+  "web_enabled": {
+    "type": "bool",
+    "description": "启用本插件的 Web 配置台：在数据目录旁启动静态页与规则接口，便于浏览器编辑 rules.json。",
+    "default": true
+  },
+  "web_host": {
+    "type": "string",
+    "description": "Web 监听地址",
+    "default": "127.0.0.1"
+  },
+  "web_port": {
+    "type": "int",
+    "description": "Web 端口",
+    "default": 5878
+  },
+  "process_messages": {
+    "type": "bool",
+    "description": "处理入站纯文本：关闭后仅保留 Web 配置台，不改写 message_str。",
+    "default": true
+  },
+  "llm_translate_enabled": {
+    "type": "bool",
+    "description": "允许 AI 翻译步骤调用聊天模型：开启后，规则中的「AI翻译」步骤可调用 AstrBot 当前会话绑定的聊天模型；选用哪家模型在 AstrBot 主界面配置，此处不重复选择。",
+    "default": false
+  },
+  "llm_translate_default_lang": {
+    "type": "string",
+    "description": "默认译向语言说明：写入给模型的自然语言说明，如「英文」「日文」；单条规则步骤里可再填目标语言覆盖此项。",
+    "default": "英文"
+  },
+  "llm_translate_prompt_suffix": {
+    "type": "string",
+    "description": "翻译提示附加说明：可选，拼在每次翻译请求末尾。",
+    "default": ""
   }
 }
