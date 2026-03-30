@@ -73,6 +73,11 @@ def _run_inner_pipeline(
         if mid == "translate_stub":
             region_text = translate_llm_fallback(region_text, scfg)
             continue
+        if mid == "filter":
+            c = scfg.get("contain")
+            if isinstance(c, str) and c != "" and c not in region_text:
+                continue
+            continue
         fn = get_module(mid)
         if fn is None:
             continue
@@ -103,6 +108,11 @@ async def _run_inner_pipeline_async(
             continue
         if mid == "translate_stub":
             region_text = translate_llm_fallback(region_text, scfg)
+            continue
+        if mid == "filter":
+            c = scfg.get("contain")
+            if isinstance(c, str) and c != "" and c not in region_text:
+                continue
             continue
         fn = get_module(mid)
         if fn is None:

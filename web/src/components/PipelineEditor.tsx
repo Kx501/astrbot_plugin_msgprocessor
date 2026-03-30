@@ -27,15 +27,13 @@ export function defaultConfig(mid: string): Record<string, unknown> {
     case "replace":
       return { from: "", to: "" };
     case "translate_llm":
-      return { target_lang: "", prefix: "[译]" };
+      return { prefix: "[译]" };
     case "append":
       return { text: "" };
     case "prepend":
       return { prefix: "" };
     case "delete":
       return { from: "" };
-    case "filter":
-      return { contain: "" };
     default:
       return {};
   }
@@ -126,23 +124,13 @@ function ModuleConfigFields({
     case "translate_llm":
       return (
         <div className="field-stack field-stack--block">
-          <div className="pipeline-config-grid">
-            <label className="field-stack">
-              <span className="label-text">{UI.cfgTranslateTarget}</span>
-              <input
-                placeholder="留空则用插件默认，如：英文"
-                value={String(c.target_lang ?? "")}
-                onChange={(e) => set({ target_lang: e.target.value })}
-              />
-            </label>
-            <label className="field-stack">
-              <span className="label-text">{UI.cfgTranslateFallbackPrefix}</span>
-              <input
-                value={String(c.prefix ?? "")}
-                onChange={(e) => set({ prefix: e.target.value })}
-              />
-            </label>
-          </div>
+          <label className="field-stack field-stack--block">
+            <span className="label-text">{UI.cfgTranslateFallbackPrefix}</span>
+            <input
+              value={String(c.prefix ?? "")}
+              onChange={(e) => set({ prefix: e.target.value })}
+            />
+          </label>
           <p className="muted pipeline-config-hint">{UI.cfgTranslateLlmHint}</p>
         </div>
       );
@@ -166,19 +154,6 @@ function ModuleConfigFields({
           <span className="label-text">{UI.cfgDeleteFrom}</span>
           <input value={String(c.from ?? "")} onChange={(e) => set({ from: e.target.value })} />
         </label>
-      );
-    case "filter":
-      return (
-        <div className="field-stack field-stack--block">
-          <label className="field-stack field-stack--block">
-            <span className="label-text">{UI.cfgContain}</span>
-            <input
-              value={String(c.contain ?? "")}
-              onChange={(e) => set({ contain: e.target.value })}
-            />
-          </label>
-          <p className="muted pipeline-config-hint">{UI.cfgContainHint}</p>
-        </div>
       );
     default:
       return <p className="muted">{UI.cfgNone}</p>;

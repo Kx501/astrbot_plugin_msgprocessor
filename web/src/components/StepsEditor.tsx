@@ -189,6 +189,7 @@ function MatchPrimaryBody({
             >
               <option value="equals">{UI.opEquals}</option>
               <option value="contains">{UI.opContains}</option>
+              <option value="not_contains">{UI.opNotContains}</option>
               <option value="startswith">{UI.opStarts}</option>
               <option value="endswith">{UI.opEnds}</option>
             </select>

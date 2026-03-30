@@ -40,7 +40,7 @@ export const UI = {
 
   matcherType: "匹配方式",
   matcherRegex: "正则表达式",
-  matcherSimple: "简单文本",
+  matcherSimple: "简单匹配",
   matcherPassthrough: "整段直通",
   matcherAnchorSlice: "锚点区间",
   matcherAnchorSliceHint:
@@ -48,6 +48,7 @@ export const UI = {
   fieldOp: "比较方式",
   opEquals: "完全相等",
   opContains: "包含",
+  opNotContains: "不包含",
   opStarts: "开头为",
   opEnds: "结尾为",
   fieldValue: "比较内容",
@@ -68,19 +69,15 @@ export const UI = {
   moduleTranslateLlm: "AI翻译",
   modulePrepend: "插入前缀",
   moduleAppend: "插入后缀",
-  moduleFilter: "过滤",
 
   cfgFrom: "查找",
   cfgTo: "替换为",
   cfgDeleteFrom: "要删除的原文（全部匹配）",
   cfgPrefix: "前缀",
   cfgText: "后缀",
-  cfgTranslateTarget: "目标语言说明",
-  cfgTranslateFallbackPrefix: "模型不可用或未开启时的前缀",
+  cfgTranslateFallbackPrefix: "模型不可用或失败时的前缀",
   cfgTranslateLlmHint:
-    "仅在Bot框架中设置允许使用AI翻译时才会请求聊天模型；本页测试只插入前缀。",
-  cfgContain: "必须包含",
-  cfgContainHint: "非空时命中段内须含此文本，本步才生效；留空不检查。",
+    "具体配置请在Bot框架中编写；本页测试仅使用前缀占位。",
   cfgNone: "此模块无额外参数",
 
   moduleLabel: "模块类型",
@@ -115,7 +112,6 @@ export const MODULE_OPTIONS: { value: string; label: string }[] = [
   { value: "translate_llm", label: UI.moduleTranslateLlm },
   { value: "prepend", label: UI.modulePrepend },
   { value: "append", label: UI.moduleAppend },
-  { value: "filter", label: UI.moduleFilter },
 ];
 
 export const STEP_OPTIONS: { value: string; label: string }[] = [

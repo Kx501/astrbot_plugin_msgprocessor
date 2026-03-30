@@ -26,16 +26,26 @@ _WEB_DIST = _PLUGIN_ROOT / "web" / "dist"
 
 
 def _default_plugin_config() -> dict[str, Any]:
-    """与仓库根 sample_config.json 字段一致（类比 ApiDog 的 config.json + sample_config.json）。"""
+    """默认值：`sample_config.json` 仅含核心 Web 项；译向模型与提示词由 AstrBot 写入 config（见 `_conf_schema.json`）。"""
     return {
         "web_enabled": True,
         "web_host": "127.0.0.1",
         "web_port": 5878,
         "process_messages": True,
-        "llm_translate_enabled": False,
-        "llm_translate_default_lang": "英文",
-        "llm_translate_prompt_suffix": "",
+        "translate_llm": "default",
+        "llm_translate_prompt": "请将以下文本翻译，只输出译文，不要解释。",
     }
+
+
+def _translate_llm_provider(cfg: dict[str, Any]) -> tuple[bool, str | None]:
+    """是否调用模型；(True, None) 表示用当前会话提供商；(True, id) 表示固定提供商；(False, None) 表示未配置提供商，只做前缀回退。"""
+    raw = cfg.get("translate_llm", "default")
+    s = "" if raw is None else str(raw).strip()
+    if not s:
+        return False, None
+    if s.lower() == "default":
+        return True, None
+    return True, s
 
 
 def _load_plugin_config(data_dir: Path) -> dict[str, Any]:
@@ -64,15 +74,21 @@ def _load_plugin_config(data_dir: Path) -> dict[str, Any]:
             pass
     if "process_messages" in raw:
         base["process_messages"] = bool(raw["process_messages"])
-    if "llm_translate_enabled" in raw:
-        base["llm_translate_enabled"] = bool(raw["llm_translate_enabled"])
-    if isinstance(raw.get("llm_translate_default_lang"), str):
-        v = raw["llm_translate_default_lang"].strip()
-        if v:
-            base["llm_translate_default_lang"] = v
-    if isinstance(raw.get("llm_translate_prompt_suffix"), str):
-        base["llm_translate_prompt_suffix"] = raw["llm_translate_prompt_suffix"]
+    if isinstance(raw.get("translate_llm"), str):
+        base["translate_llm"] = raw["translate_llm"].strip()
+    if "translate_llm" not in raw and "llm_translate_enabled" in raw:
+        base["translate_llm"] = "default" if raw["llm_translate_enabled"] else ""
+    if isinstance(raw.get("llm_translate_prompt"), str):
+        base["llm_translate_prompt"] = raw["llm_translate_prompt"]
     return base
+
+
+def _build_translate_prompt(instruction: str, text: str) -> str:
+    """说明句（含译向，在 AstrBot 提示词中配置）与待译正文拼接。"""
+    head = (instruction or "").strip()
+    if not head:
+        head = "请将以下文本翻译成中文，只输出译文，不要解释。"
+    return f"{head}\n\n{text}"
 
 
 @register(
@@ -156,16 +172,17 @@ class MsgProcessorStar(Star):
         ctx_ab = self.context
 
         async def translate_llm(text: str, scfg: dict[str, Any], _pctx: Any, _hit: Any) -> str:
-            if not cfg_star.get("llm_translate_enabled", False):
+            use_llm, fixed_provider = _translate_llm_provider(cfg_star)
+            if not use_llm:
                 return translate_llm_fallback(text, scfg)
-            target = str(scfg.get("target_lang") or cfg_star.get("llm_translate_default_lang") or "英文").strip()
-            suffix = str(cfg_star.get("llm_translate_prompt_suffix") or "").strip()
-            prompt = f"请将以下文本翻译成{target}，只输出译文，不要解释：\n\n{text}"
-            if suffix:
-                prompt = f"{prompt}\n\n{suffix}"
+            instruction = str(cfg_star.get("llm_translate_prompt") or "")
+            prompt = _build_translate_prompt(instruction, text)
             try:
-                umo = event.unified_msg_origin
-                pid = await ctx_ab.get_current_chat_provider_id(umo=umo)
+                if fixed_provider is None:
+                    umo = event.unified_msg_origin
+                    pid = await ctx_ab.get_current_chat_provider_id(umo=umo)
+                else:
+                    pid = fixed_provider
                 resp = await ctx_ab.llm_generate(chat_provider_id=pid, prompt=prompt)
                 out = (getattr(resp, "completion_text", None) or "").strip()
                 return out if out else translate_llm_fallback(text, scfg)

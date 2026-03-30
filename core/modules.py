@@ -50,21 +50,12 @@ def mod_delete(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: Matc
     return ModuleResult(out)
 
 
-def mod_filter(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """非空 ``contain`` 须出现在命中段内，否则本步 ``skip_rule``。"""
-    c = cfg.get("contain")
-    if isinstance(c, str) and c != "" and c not in text:
-        return ModuleResult(text, skip_rule=True)
-    return ModuleResult(text)
-
-
 BUILTIN_MODULES: dict[str, ModuleFn] = {
     "noop": mod_noop,
     "replace": mod_replace,
     "delete": mod_delete,
     "prepend": mod_prepend,
     "append": mod_append,
-    "filter": mod_filter,
 }
 
 

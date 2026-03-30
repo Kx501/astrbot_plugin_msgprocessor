@@ -113,6 +113,12 @@ def find_hits_simple(
             if len(hits) >= max_matches:
                 break
         return hits
+    if op == "not_contains":
+        if not needle:
+            return hits
+        if needle not in hay:
+            add(0, len(slice_text))
+        return hits
     return hits
 
 
