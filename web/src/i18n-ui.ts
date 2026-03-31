@@ -61,7 +61,7 @@ export const UI = {
   regionGroup: "正则捕获组",
   fieldGroupIndex: "捕获组序号",
   fieldGroupName: "命名组（可选，留空则用序号）",
-  fieldMaxMatches: "同一规则最多生效次数",
+  fieldMaxMatches: "同一规则最多生效次数（0 为无限）",
 
   moduleNoop: "无操作",
   moduleReplace: "替换",
@@ -73,6 +73,9 @@ export const UI = {
   cfgFrom: "查找",
   cfgTo: "替换为",
   cfgDeleteFrom: "要删除的原文（全部匹配）",
+  cfgWholeFromEmpty: "为空时处理整段",
+  cfgReplaceRegex: "按正则处理查找",
+  cfgRegexFlags: "正则标志（逗号分隔）",
   cfgPrefix: "前缀",
   cfgText: "后缀",
   cfgTranslateFallbackPrefix: "模型不可用或失败时的前缀",

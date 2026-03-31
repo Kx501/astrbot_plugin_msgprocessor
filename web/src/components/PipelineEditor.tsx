@@ -25,7 +25,7 @@ const MODULE_VALUES = new Set(MODULE_OPTIONS.map((o) => o.value));
 export function defaultConfig(mid: string): Record<string, unknown> {
   switch (mid) {
     case "replace":
-      return { from: "", to: "" };
+      return { from: "", to: "", whole_from_empty: false, regex: false, regex_flags: "" };
     case "translate_llm":
       return { prefix: "[译]" };
     case "append":
@@ -33,7 +33,7 @@ export function defaultConfig(mid: string): Record<string, unknown> {
     case "prepend":
       return { prefix: "" };
     case "delete":
-      return { from: "" };
+      return { from: "", whole_from_empty: false };
     default:
       return {};
   }
@@ -119,6 +119,30 @@ function ModuleConfigFields({
             <span className="label-text">{UI.cfgTo}</span>
             <input value={String(c.to ?? "")} onChange={(e) => set({ to: e.target.value })} />
           </label>
+          <label className="field-inline-check field-inline-check--align-input">
+            <input
+              type="checkbox"
+              checked={Boolean(c.whole_from_empty)}
+              onChange={(e) => set({ whole_from_empty: e.target.checked })}
+            />
+            <span>{UI.cfgWholeFromEmpty}</span>
+          </label>
+          <label className="field-inline-check field-inline-check--align-input">
+            <input
+              type="checkbox"
+              checked={Boolean(c.regex)}
+              onChange={(e) => set({ regex: e.target.checked })}
+            />
+            <span>{UI.cfgReplaceRegex}</span>
+          </label>
+          <label className="field-stack">
+            <span className="label-text">{UI.cfgRegexFlags}</span>
+            <input
+              placeholder="例如：IGNORECASE, MULTILINE, DOTALL"
+              value={String(c.regex_flags ?? "")}
+              onChange={(e) => set({ regex_flags: e.target.value })}
+            />
+          </label>
         </div>
       );
     case "translate_llm":
@@ -150,10 +174,20 @@ function ModuleConfigFields({
       );
     case "delete":
       return (
-        <label className="field-stack field-stack--block">
-          <span className="label-text">{UI.cfgDeleteFrom}</span>
-          <input value={String(c.from ?? "")} onChange={(e) => set({ from: e.target.value })} />
-        </label>
+        <div className="pipeline-config-grid">
+          <label className="field-stack">
+            <span className="label-text">{UI.cfgDeleteFrom}</span>
+            <input value={String(c.from ?? "")} onChange={(e) => set({ from: e.target.value })} />
+          </label>
+          <label className="field-inline-check field-inline-check--align-input">
+            <input
+              type="checkbox"
+              checked={Boolean(c.whole_from_empty)}
+              onChange={(e) => set({ whole_from_empty: e.target.checked })}
+            />
+            <span>{UI.cfgWholeFromEmpty}</span>
+          </label>
+        </div>
       );
     default:
       return <p className="muted">{UI.cfgNone}</p>;

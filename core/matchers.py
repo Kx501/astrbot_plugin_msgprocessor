@@ -44,8 +44,9 @@ def find_hits_regex(
     fk = tuple(flags or ())
     rx = _compile_cached(pattern, fk)
     hits: list[MatchHit] = []
+    unlimited = max_matches <= 0
     for m in rx.finditer(slice_text):
-        if len(hits) >= max_matches:
+        if (not unlimited) and len(hits) >= max_matches:
             break
         kind = (region_cfg or {}).get("kind", "match")
         if kind == "group":
@@ -84,9 +85,10 @@ def find_hits_simple(
     hay = slice_text.lower() if ignore_case else slice_text
     needle = value.lower() if ignore_case else value
     hits: list[MatchHit] = []
+    unlimited = max_matches <= 0
 
     def add(rs: int, re_: int) -> None:
-        if len(hits) >= max_matches:
+        if (not unlimited) and len(hits) >= max_matches:
             return
         hits.append(_match_hit_plain(slice_text, rs, re_, global_offset))
 
@@ -110,7 +112,7 @@ def find_hits_simple(
                 break
             add(idx, idx + len(value))
             pos = idx + max(1, len(value))
-            if len(hits) >= max_matches:
+            if (not unlimited) and len(hits) >= max_matches:
                 break
         return hits
     if op == "not_contains":
@@ -133,8 +135,6 @@ def find_hits_passthrough(
     n = len(slice_text)
     if n == 0:
         return []
-    if max_matches < 1:
-        return []
     return [_match_hit_plain(slice_text, 0, n, global_offset)]
 
 
@@ -150,7 +150,8 @@ def find_hits_anchor_slice(
     if wspan is None:
         return []
     wstart, wend = wspan.start, wspan.end
-    if wstart >= wend or max_matches < 1:
+    # 0/负数表示无限，anchor_slice 仅产生命中 1 次，所以无限与否都允许
+    if wstart >= wend:
         return []
     return [_match_hit_plain(slice_text, wstart, wend, global_offset)]
 

@@ -30,10 +30,13 @@ def _non_overlapping_hits(hits: list[MatchHit]) -> list[MatchHit]:
 
 def _parse_max_matches(limits: dict[str, Any]) -> int:
     try:
-        max_matches = int(limits.get("max_matches", 64))
+        max_matches = int(limits.get("max_matches", 0))
     except (TypeError, ValueError):
-        max_matches = 64
-    return max(1, min(max_matches, 256))
+        max_matches = 0
+    # 0 或负数视为无限；正数沿用上限保护
+    if max_matches <= 0:
+        return 0
+    return min(max_matches, 256)
 
 
 def _parse_max_len(limits: dict[str, Any]) -> int:

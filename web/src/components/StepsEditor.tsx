@@ -166,7 +166,7 @@ function MatchPrimaryBody({
           <label className="field-stack span-cols-2">
             <span className="label-text">{UI.fieldFlags}</span>
             <input
-              placeholder="例如：IGNORECASE"
+              placeholder="例如：IGNORECASE, MULTILINE, DOTALL"
               value={((matcher.flags as string[] | undefined) ?? []).join(", ")}
               onChange={(e) => {
                 const flags = e.target.value

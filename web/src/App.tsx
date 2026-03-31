@@ -26,7 +26,7 @@ function emptyRule(): RuleUI {
     id: `rule_${Date.now()}`,
     enabled: true,
     priority: 0,
-    limits: { max_matches: 64 },
+    limits: { max_matches: 0 },
     steps: [{ _key: newKey(), id: "match_block", config: defaultStepConfig("match_block") }],
   };
 }
@@ -264,12 +264,14 @@ export default function App() {
                   <span className="label-text">{UI.fieldMaxMatches}</span>
                   <input
                     type="number"
-                    value={rule.limits?.max_matches ?? 64}
+                    value={rule.limits?.max_matches ?? 0}
                     onChange={(e) =>
                       updateRule({
                         limits: {
                           ...rule.limits,
-                          max_matches: Number(e.target.value) || 64,
+                          max_matches: Number.isFinite(Number(e.target.value))
+                            ? Number(e.target.value)
+                            : 0,
                         },
                       })
                     }

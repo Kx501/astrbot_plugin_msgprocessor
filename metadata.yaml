@@ -1,6 +1,6 @@
 name: astrbot_plugin_msgprocessor
 display_name: MsgProcessor
-version: "1.2.0"
+version: "1.2.1"
 author: "Kx501"
 desc: 消息处理器，用于对消息进行多种个性化处理，支持网页配置。
 repo: "https://github.com/Kx501/astrbot_plugin_msgprocessor"
