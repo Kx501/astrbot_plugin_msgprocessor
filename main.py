@@ -212,12 +212,33 @@ class MsgProcessorStar(Star):
 
     @filter.on_decorating_result()
     async def on_decorating_result_tap(self, event: AstrMessageEvent) -> None:
-        """监听发送前装饰阶段（覆盖主动/被动发送链路）。"""
+        """发送前装饰阶段：对结果链中的纯文本段应用规则处理。"""
         try:
             result = event.get_result()
             chain = getattr(result, "chain", None)
-            chain_len = len(chain) if isinstance(chain, list) else 0
-            ab_logger.debug("MsgProcessor: on_decorating_result chain_len=%s", chain_len)
+            if not isinstance(chain, list) or not chain:
+                return
+            if not self._cfg.get("process_messages", True):
+                return
+
+            doc = self._load_rules_doc()
+            meta = {"translate_llm": self._translate_llm_handler(event)}
+            changed = 0
+            for comp in chain:
+                text = getattr(comp, "text", None)
+                if not isinstance(text, str) or text == "":
+                    continue
+                out = await process_text_async(doc, text, meta=meta)
+                if out != text:
+                    try:
+                        setattr(comp, "text", out)
+                        changed += 1
+                    except Exception:
+                        # 个别消息段实现可能不允许直接写 text，忽略该段继续处理其它段
+                        continue
+
+            if changed > 0:
+                ab_logger.debug("MsgProcessor: on_decorating_result changed_plain_segments=%s", changed)
         except Exception:
             ab_logger.exception("MsgProcessor: on_decorating_result 监听异常")
 
