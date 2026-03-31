@@ -91,6 +91,14 @@ def _build_translate_prompt(instruction: str, text: str) -> str:
     return f"{head}\n\n{text}"
 
 
+def _preview_text(s: Any, max_len: int = 120) -> str:
+    text = "" if s is None else str(s)
+    text = text.replace("\n", "\\n")
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 3] + "..."
+
+
 @register(
     "MsgProcessor",
     "按规则处理入站消息的纯文本（message_str），并可选启动 Web 配置台。数据目录与 ApiDog 相同：rules.json、config.json。",
@@ -191,6 +199,27 @@ class MsgProcessorStar(Star):
                 return translate_llm_fallback(text, scfg)
 
         return translate_llm
+
+    @filter.on_llm_response()
+    async def on_llm_response_tap(self, event: AstrMessageEvent, resp: Any) -> None:
+        """监听 LLM 回复阶段（发送前）。"""
+        try:
+            out = getattr(resp, "completion_text", None)
+            preview = _preview_text(out)
+            ab_logger.debug("MsgProcessor: on_llm_response preview=%s", preview)
+        except Exception:
+            ab_logger.exception("MsgProcessor: on_llm_response 监听异常")
+
+    @filter.on_decorating_result()
+    async def on_decorating_result_tap(self, event: AstrMessageEvent) -> None:
+        """监听发送前装饰阶段（覆盖主动/被动发送链路）。"""
+        try:
+            result = event.get_result()
+            chain = getattr(result, "chain", None)
+            chain_len = len(chain) if isinstance(chain, list) else 0
+            ab_logger.debug("MsgProcessor: on_decorating_result chain_len=%s", chain_len)
+        except Exception:
+            ab_logger.exception("MsgProcessor: on_decorating_result 监听异常")
 
     @filter.event_message_type(
         filter.EventMessageType.GROUP_MESSAGE | filter.EventMessageType.PRIVATE_MESSAGE,

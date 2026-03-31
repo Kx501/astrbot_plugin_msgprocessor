@@ -74,7 +74,7 @@ export const UI = {
   cfgTo: "替换为",
   cfgDeleteFrom: "要删除的原文（全部匹配）",
   cfgWholeFromEmpty: "为空时处理整段",
-  cfgReplaceRegex: "按正则处理查找",
+  cfgReplaceRegex: "正则替换",
   cfgRegexFlags: "正则标志（逗号分隔）",
   cfgPrefix: "前缀",
   cfgText: "后缀",
