@@ -36,7 +36,8 @@ export const UI = {
   anchorEnd: "结束锚点",
   fieldLiteral: "锚点字符串",
   fieldOccurrence: "第几次出现（0 为首次）",
-  fieldInclusive: "匹配范围包含锚点本身",
+  fieldInclusive: "截取范围包含锚点",
+  anchorIgnoreSameLine: "忽略与锚点同行的文本",
 
   matcherType: "匹配方式",
   matcherRegex: "正则表达式",

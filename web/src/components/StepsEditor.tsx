@@ -31,7 +31,7 @@ export function defaultStepConfig(stepId: string): Record<string, unknown> {
   switch (stepId) {
     case "match_block":
       return {
-        matcher: { type: "regex", pattern: ".*", flags: [] as string[] },
+        matcher: { type: "passthrough" },
         region: { kind: "match" },
         steps: [{ _key: newKey(), id: "noop", config: {} }],
       };
@@ -46,10 +46,16 @@ function AnchorFields({
   label,
   value,
   onChange,
+  ignoreSameLine,
+  onIgnoreSameLineChange,
+  ignoreSameLineLabel,
 }: {
   label: string;
   value: WindowAnchor;
   onChange: (a: WindowAnchor) => void;
+  ignoreSameLine: boolean;
+  onIgnoreSameLineChange: (v: boolean) => void;
+  ignoreSameLineLabel: string;
 }) {
   return (
     <div className="anchor-block">
@@ -67,14 +73,24 @@ function AnchorFields({
             onChange={(e) => onChange({ ...value, occurrence: Number(e.target.value) || 0 })}
           />
         </label>
-        <label className="field-inline-check field-inline-check--anchor">
-          <input
-            type="checkbox"
-            checked={value.inclusive}
-            onChange={(e) => onChange({ ...value, inclusive: e.target.checked })}
-          />
-          <span>{UI.fieldInclusive}</span>
-        </label>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label className="field-inline-check field-inline-check--solo">
+            <input
+              type="checkbox"
+              checked={value.inclusive}
+              onChange={(e) => onChange({ ...value, inclusive: e.target.checked })}
+            />
+            <span>{UI.fieldInclusive}</span>
+          </label>
+          <label className="field-inline-check field-inline-check--solo">
+            <input
+              type="checkbox"
+              checked={ignoreSameLine}
+              onChange={(e) => onIgnoreSameLineChange(e.target.checked)}
+            />
+            <span>{ignoreSameLineLabel}</span>
+          </label>
+        </div>
       </div>
     </div>
   );
@@ -88,9 +104,7 @@ function MatchPrimaryBody({
   setConfig: (c: Record<string, unknown>) => void;
 }) {
   const matcher = (config.matcher as Record<string, unknown> | undefined) ?? {
-    type: "regex",
-    pattern: ".*",
-    flags: [] as string[],
+    type: "passthrough",
   };
   const region = (config.region as { kind: string; index?: number; name?: string } | undefined) ?? {
     kind: "match",
@@ -118,6 +132,9 @@ function MatchPrimaryBody({
               type: "anchor_slice",
               start: emptyAnchor(),
               end: emptyAnchor(),
+              ignore_anchor_line: false,
+              ignore_start_anchor_line: false,
+              ignore_end_anchor_line: false,
             });
           } else {
             setMatcher({ type: "passthrough" });
@@ -143,11 +160,17 @@ function MatchPrimaryBody({
               label={UI.anchorStart}
               value={(matcher.start as WindowAnchor | undefined) ?? emptyAnchor()}
               onChange={(start) => setMatcher({ ...matcher, start })}
+              ignoreSameLine={Boolean(matcher.ignore_start_anchor_line)}
+              onIgnoreSameLineChange={(v) => setMatcher({ ...matcher, ignore_start_anchor_line: v })}
+              ignoreSameLineLabel={UI.anchorIgnoreSameLine}
             />
             <AnchorFields
               label={UI.anchorEnd}
               value={(matcher.end as WindowAnchor | undefined) ?? emptyAnchor()}
               onChange={(end) => setMatcher({ ...matcher, end })}
+              ignoreSameLine={Boolean(matcher.ignore_end_anchor_line)}
+              onIgnoreSameLineChange={(v) => setMatcher({ ...matcher, ignore_end_anchor_line: v })}
+              ignoreSameLineLabel={UI.anchorIgnoreSameLine}
             />
           </div>
         </div>
