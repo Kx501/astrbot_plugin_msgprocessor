@@ -1,8 +1,6 @@
-__pycache__/
-*.py[cod]
-.venv/
-venv/
+node_modules/
+dist/
+src/webui/node_modules/
+src/webui/dist/
 .env
-*/node_modules/
-/data/
-*.egg-info/
+.DS_Store

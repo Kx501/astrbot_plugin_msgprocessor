@@ -1,0 +1,32 @@
+{
+  "name": "napcat-plugin-msgprocessor",
+  "plugin": "MsgProcessor",
+  "version": "2.0.0",
+  "type": "module",
+  "main": "index.mjs",
+  "description": "NapCat 消息处理插件：规则改写文本并可调用 AstrBot API 翻译",
+  "author": "Kx501",
+  "license": "MIT",
+  "napcat": {
+    "tags": [
+      "文本处理"
+    ],
+    "minVersion": "4.14.0",
+    "homepage": "https://github.com/Kx501/astrbot_plugin_msgprocessor"
+  },
+  "dependencies": {
+    "napcat-types": "0.0.16"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.3.1",
+    "@types/node": "^22.15.29",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  },
+  "scripts": {
+    "build:webui": "npm --prefix src/webui run build",
+    "build": "vite build && npm run build:webui",
+    "watch": "vite build --watch",
+    "typecheck": "tsc --noEmit"
+  }
+}
