@@ -27,7 +27,6 @@ export const plugin_init: PluginModule["plugin_init"] = async (ctx) => {
   await ensureRulesFile(ctx);
   registerWebUi(ctx);
   ctx.logger.info("MsgProcessor initialized");
-  ctx.logger.info(`MsgProcessor dataPath: ${ctx.dataPath}`);
 };
 
 export const plugin_on_config_change: PluginModule["plugin_on_config_change"] = async (ctx) => {
@@ -146,7 +145,8 @@ function registerWebUi(ctx: NapCatPluginContext): void {
       const message = String(req.body?.message ?? "");
       const rules = req.body?.rules;
       const output = await processText(rules, message, {
-        translateLlm: async (text) => translateByAstrBotApi(text),
+        // 前端测试区使用占位翻译，避免依赖外部 API 和鉴权状态
+        translateLlm: async (text, stepCfg) => `${String(stepCfg.prefix ?? "[译]")}${text}`,
       });
       res.json({ code: 0, data: { output } });
     } catch (err) {

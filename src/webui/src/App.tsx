@@ -37,6 +37,7 @@ export default function App() {
   const [testError, setTestError] = useState<string | null>(null);
   const [testBusy, setTestBusy] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -206,12 +207,35 @@ export default function App() {
               <div className="row spread main-head">
                 <h2>{UI.editRule}：<span className="rule-id">{rule.id || UI.ruleUntitled(selected + 1)}</span></h2>
                 <div className="main-head__actions">
-                  <button type="button" className="btn btn-ghost btn-danger-ghost main-head__delete" onClick={() => {
-                    if (!confirm(UI.deleteConfirm)) return;
-                    const next = doc.rules.filter((_, i) => i !== selected);
-                    setDoc({ ...doc, rules: next });
-                    setSelected(Math.max(0, selected - 1));
-                  }}>{UI.deleteRule}</button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-danger-ghost main-head__delete"
+                    onClick={() => setDeleteConfirmOpen(true)}
+                  >
+                    {UI.deleteRule}
+                  </button>
+                  {deleteConfirmOpen ? (
+                    <div className="delete-confirm-inline">
+                      <span>{UI.deleteConfirm}</span>
+                      <div className="delete-confirm-inline__actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-danger-ghost"
+                          onClick={() => {
+                            const next = doc.rules.filter((_, i) => i !== selected);
+                            setDoc({ ...doc, rules: next });
+                            setSelected(Math.max(0, selected - 1));
+                            setDeleteConfirmOpen(false);
+                          }}
+                        >
+                          确认
+                        </button>
+                        <button type="button" className="btn btn-sm" onClick={() => setDeleteConfirmOpen(false)}>
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                   <label className="field-inline-check main-head__enable">
                     <input type="checkbox" checked={rule.enabled} onChange={(e) => updateRule({ enabled: e.target.checked })} />
                     <span>{UI.fieldEnabled}</span>
