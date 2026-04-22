@@ -54,14 +54,24 @@ function AnchorFields({
         <span className="label-text">{UI.fieldLiteral}</span>
         <input value={value.literal} onChange={(e) => onChange({ ...value, literal: e.target.value })} />
       </label>
-      <label className="field-stack field-stack--occurrence">
-        <span className="label-text">{UI.fieldOccurrence}</span>
-        <input type="number" value={value.occurrence} onChange={(e) => onChange({ ...value, occurrence: Number(e.target.value) || 0 })} />
-      </label>
-      <label className="field-inline-check field-inline-check--solo">
-        <input type="checkbox" checked={value.inclusive} onChange={(e) => onChange({ ...value, inclusive: e.target.checked })} />
-        <span>{UI.fieldInclusive}</span>
-      </label>
+      <div className="anchor-row-secondary">
+        <label className="field-stack field-stack--occurrence">
+          <span className="label-text">{UI.fieldOccurrence}</span>
+          <input
+            type="number"
+            value={value.occurrence}
+            onChange={(e) => onChange({ ...value, occurrence: Number(e.target.value) || 0 })}
+          />
+        </label>
+        <label className="field-inline-check field-inline-check--anchor">
+          <input
+            type="checkbox"
+            checked={value.inclusive}
+            onChange={(e) => onChange({ ...value, inclusive: e.target.checked })}
+          />
+          <span>{UI.fieldInclusive}</span>
+        </label>
+      </div>
     </div>
   );
 }
