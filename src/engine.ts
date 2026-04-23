@@ -304,7 +304,8 @@ function normalizeRegexReplacement(raw: string): string {
 
 export function normalizeConfig(raw: Record<string, unknown>): PluginConfig {
   return {
-    process_messages: raw.process_messages !== false,
+    enable_private: raw.enable_private !== false,
+    enable_group: raw.enable_group !== false,
     rules_file: String(raw.rules_file ?? "rules.json"),
     astrbot_api_base: String(raw.astrbot_api_base ?? "http://127.0.0.1:6185"),
     astrbot_api_key: String(raw.astrbot_api_key ?? ""),

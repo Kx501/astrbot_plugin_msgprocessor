@@ -22,11 +22,25 @@ export interface RuleStep {
 }
 
 export interface PluginConfig {
-  process_messages: boolean;
+  enable_private: boolean;
+  enable_group: boolean;
   rules_file: string;
   astrbot_api_base: string;
   astrbot_api_key: string;
   astrbot_username: string;
   astrbot_session_id: string;
   llm_translate_prompt: string;
+}
+
+export type ScopeMode = "all" | "whitelist" | "blacklist";
+
+export interface ScopeSettings {
+  enable_private: boolean;
+  enable_group: boolean;
+  private_mode: ScopeMode;
+  private_whitelist: string[];
+  private_blacklist: string[];
+  group_mode: ScopeMode;
+  group_whitelist: string[];
+  group_blacklist: string[];
 }

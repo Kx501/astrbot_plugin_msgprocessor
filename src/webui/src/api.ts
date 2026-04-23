@@ -1,4 +1,4 @@
-import type { RulesDocumentUI, RulesDocumentWire } from "./types";
+import type { RulesDocumentUI, RulesDocumentWire, ScopeSettings, ScopeTargetsResponse } from "./types";
 import { uiToWire } from "./types";
 
 function resolvePluginName() {
@@ -43,4 +43,20 @@ export async function processMessage(message: string, doc: RulesDocumentUI): Pro
     body: JSON.stringify({ message, rules }),
   });
   return data.output;
+}
+
+export async function fetchScopeSettings(): Promise<ScopeSettings> {
+  return request<ScopeSettings>("/scope-settings");
+}
+
+export async function saveScopeSettings(settings: ScopeSettings): Promise<ScopeSettings> {
+  return request<ScopeSettings>("/scope-settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
+  });
+}
+
+export async function fetchScopeTargets(): Promise<ScopeTargetsResponse> {
+  return request<ScopeTargetsResponse>("/scope-targets");
 }

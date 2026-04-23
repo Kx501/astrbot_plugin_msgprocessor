@@ -284,6 +284,35 @@ code,
   padding: 1.15rem 1.25rem 1.25rem;
 }
 
+.top-tabs {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.top-tab {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.95rem;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.top-tab:hover {
+  background: var(--subtle-hover);
+  border-color: var(--border-strong);
+}
+
+.top-tab.active {
+  background: var(--rule-active-bg);
+  border-color: var(--accent);
+}
+
 .layout .section-card {
   padding-top: 0.6rem;
 }
@@ -494,6 +523,116 @@ textarea {
   grid-template-columns: 240px 1fr;
   gap: 1.1rem;
   align-items: start;
+}
+
+.scope-panel {
+  margin-top: 0;
+}
+
+.scope-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem 1rem;
+  margin-top: 0.9rem;
+}
+
+.scope-toggle {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  padding: 0.55rem 0.7rem;
+}
+
+.scope-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 0.55rem;
+}
+
+.scope-mode-hint {
+  margin: -0.2rem 0 0.05rem;
+}
+
+.scope-actions {
+  margin-top: 0.8rem;
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.scope-two-col .fieldset {
+  padding: 0.5rem 0.82rem 0.72rem;
+}
+
+.scope-two-col .fieldset-body {
+  gap: 0.42rem;
+}
+
+.scope-two-col .field,
+.scope-two-col .field-stack {
+  gap: 0.24rem;
+}
+
+.scope-two-col .field-label,
+.scope-two-col .label-text {
+  line-height: 1.2;
+  font-size: 0.78rem;
+}
+
+.scope-two-col .muted {
+  margin: 0;
+  line-height: 1.22;
+  font-size: 0.8rem;
+}
+
+.scope-search-field {
+  margin-top: 0.26rem;
+}
+
+.scope-selected-count {
+  margin-top: 0.14rem !important;
+  margin-bottom: 0.18rem !important;
+}
+
+.scope-target-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem;
+  background: var(--surface-2);
+}
+
+.scope-target-list[aria-disabled="true"] {
+  opacity: 0.6;
+}
+
+.scope-target-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.38rem 0.5rem;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.scope-target-card.checked {
+  border-color: var(--accent);
+  background: var(--rule-active-bg);
+}
+
+@media (max-width: 800px) {
+  .scope-grid,
+  .scope-two-col {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 800px) {

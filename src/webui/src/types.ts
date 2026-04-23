@@ -47,6 +47,29 @@ export interface RulesDocumentWire {
   rules?: RuleWire[];
 }
 
+export type ScopeMode = "all" | "whitelist" | "blacklist";
+
+export interface ScopeSettings {
+  enable_private: boolean;
+  enable_group: boolean;
+  private_mode: ScopeMode;
+  private_whitelist: string[];
+  private_blacklist: string[];
+  group_mode: ScopeMode;
+  group_whitelist: string[];
+  group_blacklist: string[];
+}
+
+export interface ScopeTargetItem {
+  id: string;
+  label: string;
+}
+
+export interface ScopeTargetsResponse {
+  friends: ScopeTargetItem[];
+  groups: ScopeTargetItem[];
+}
+
 export function newKey(): string {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }

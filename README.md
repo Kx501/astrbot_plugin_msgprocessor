@@ -44,6 +44,7 @@ npm run build
 本插件已完全切换到 NapCat 插件数据目录（`ctx.dataPath`）读写规则文件，不再兼容 AstrBot 旧插件目录。
 
 - 运行时规则文件路径：`<ctx.dataPath>/<rules_file>`（默认 `rules.json`）
+- 消息范围配置路径：`<ctx.dataPath>/scope_settings.json`
 - 不会自动搬迁旧数据
 - 需要你手动把旧 AstrBot 的 `rules.json` 复制到 NapCat 对应插件的 `dataPath`
 
@@ -54,10 +55,13 @@ NapCat 插件生命周期与上下文字段说明可参考官方文档：
 
 插件配置页支持以下字段：
 
-- `process_messages`：是否启用消息处理
+- `enable_private`：是否处理私聊消息
+- `enable_group`：是否处理群聊消息
 - `rules_file`：规则文件名（位于插件 `dataPath`）
 - `astrbot_api_base`：AstrBot API 地址（默认 `http://127.0.0.1:6185`）
 - `astrbot_api_key`：AstrBot API Key
 - `astrbot_username`：调用 chat API 的 username
 - `astrbot_session_id`：调用 chat API 的 session_id
 - `llm_translate_prompt`：翻译提示词
+
+其余消息范围配置（私聊/群聊模式、黑白名单）放在插件内 WebUI 的“消息范围”页签中维护，会写入 `scope_settings.json`。
