@@ -3,7 +3,7 @@
 export const UI = {
   appTitle: "MsgProcessor",
   appSubtitle:
-    "入站消息文本处理规则 · 与 AstrBot 插件数据目录中的 rules.json 同步",
+    "待发消息文本处理规则 · 与 AstrBot 插件数据目录中的 rules.json 同步",
   footer: "文本规则按优先级依次匹配；修改后请点击保存写入磁盘。",
 
   loading: "正在加载规则…",
