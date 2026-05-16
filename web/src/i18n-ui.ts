@@ -68,8 +68,8 @@ export const UI = {
   moduleReplace: "替换",
   moduleDelete: "删除",
   moduleTranslateLlm: "AI翻译",
-  modulePrepend: "插入前缀",
-  moduleAppend: "插入后缀",
+  modulePrepend: "前方拼接",
+  moduleAppend: "后方拼接",
 
   cfgFrom: "查找",
   cfgTo: "替换为",
@@ -77,11 +77,12 @@ export const UI = {
   cfgWholeFromEmpty: "为空时处理整段",
   cfgReplaceRegex: "正则替换",
   cfgRegexFlags: "正则标志（逗号分隔）",
-  cfgPrefix: "前缀",
-  cfgText: "后缀",
-  cfgTranslateFallbackPrefix: "模型不可用或失败时的前缀",
+  cfgPrefix: "前方拼接内容",
+  cfgText: "后方拼接内容",
+  cfgLiteralEscapeHint: "支持转义：\\n 换行、\\t 制表符、\\\\ 反斜杠",
+  cfgTranslateFallbackPrefix: "模型不可用或失败时的回退标记",
   cfgTranslateLlmHint:
-    "具体配置请在Bot框架中编写；本页测试仅使用前缀占位。",
+    "译向与提示词在插件配置中设置；测试时仅展示回退标记。",
   cfgNone: "此模块无额外参数",
 
   moduleLabel: "模块类型",

@@ -13,6 +13,15 @@ from .models import MatchHit, ModuleResult, ProcessingContext
 
 ModuleFn = Callable[[str, dict[str, Any], ProcessingContext, MatchHit | None], ModuleResult]
 
+_BACKSLASH_PLACEHOLDER = "\x00"
+
+
+def _unescape_config_literal(s: str) -> str:
+    """配置字面量中的 ``\\n``、``\\t``、``\\\\`` 等转为实际字符。"""
+    out = s.replace("\\\\", _BACKSLASH_PLACEHOLDER)
+    out = out.replace("\\n", "\n").replace("\\r", "\r").replace("\\t", "\t")
+    return out.replace(_BACKSLASH_PLACEHOLDER, "\\")
+
 
 def _parse_regex_flags(raw: Any) -> int:
     if isinstance(raw, str):
@@ -62,17 +71,19 @@ def mod_replace(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: Mat
 
 def translate_llm_fallback(text: str, cfg: dict[str, Any]) -> str:
     """未注入 AI翻译或调用失败时的回退：前缀 + 原文。"""
-    prefix = str(cfg.get("prefix", "[译]"))
+    prefix = _unescape_config_literal(str(cfg.get("prefix", "[译]")))
     return prefix + text
 
 
 def mod_append(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    return ModuleResult(text + str(cfg.get("text", "")))
+    suffix = _unescape_config_literal(str(cfg.get("text", "")))
+    return ModuleResult(text + suffix)
 
 
 def mod_prepend(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
     """在命中段前拼接字面量前缀（``prefix + text``）。"""
-    return ModuleResult(str(cfg.get("prefix", "")) + text)
+    prefix = _unescape_config_literal(str(cfg.get("prefix", "")))
+    return ModuleResult(prefix + text)
 
 
 def mod_delete(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:

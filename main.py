@@ -152,12 +152,6 @@ def _restore_send_message_patch() -> None:
     _send_patch_installed = False
 
 
-@register(
-    "MsgProcessor",
-    "按规则处理待发消息的纯文本（发送前装饰与主动 send_message），并可选启动 Web 配置台。数据目录：rules.json、config.json。",
-    "0.1.0",
-    "",
-)
 class MsgProcessorStar(Star):
     def __init__(self, context: Context) -> None:
         super().__init__(context)

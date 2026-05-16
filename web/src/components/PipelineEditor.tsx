@@ -160,17 +160,23 @@ function ModuleConfigFields({
       );
     case "append":
       return (
-        <label className="field-stack field-stack--block">
-          <span className="label-text">{UI.cfgText}</span>
-          <input value={String(c.text ?? "")} onChange={(e) => set({ text: e.target.value })} />
-        </label>
+        <div className="field-stack field-stack--block">
+          <label className="field-stack field-stack--block">
+            <span className="label-text">{UI.cfgText}</span>
+            <input value={String(c.text ?? "")} onChange={(e) => set({ text: e.target.value })} />
+          </label>
+          <p className="muted pipeline-config-hint">{UI.cfgLiteralEscapeHint}</p>
+        </div>
       );
     case "prepend":
       return (
-        <label className="field-stack field-stack--block">
-          <span className="label-text">{UI.cfgPrefix}</span>
-          <input value={String(c.prefix ?? "")} onChange={(e) => set({ prefix: e.target.value })} />
-        </label>
+        <div className="field-stack field-stack--block">
+          <label className="field-stack field-stack--block">
+            <span className="label-text">{UI.cfgPrefix}</span>
+            <input value={String(c.prefix ?? "")} onChange={(e) => set({ prefix: e.target.value })} />
+          </label>
+          <p className="muted pipeline-config-hint">{UI.cfgLiteralEscapeHint}</p>
+        </div>
       );
     case "delete":
       return (
