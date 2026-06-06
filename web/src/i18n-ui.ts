@@ -82,6 +82,33 @@ export const UI = {
   modulePrepend: "前方拼接",
   moduleAppend: "后方拼接",
   moduleSplit: "标记分割",
+  moduleGuard: "条件守卫",
+
+  guardLogic: "条件组合",
+  guardLogicAll: "全部满足",
+  guardLogicAny: "任一满足",
+  guardWhenTrue: "条件成立时",
+  guardWhenFalse: "条件不成立时",
+  guardOutcomePass: "不做处理（继续后续模块）",
+  guardOutcomeBlock: "拦截发送",
+  guardOutcomeStopRule: "终止本条规则后续步骤",
+  guardAddCondition: "添加条件",
+  guardRemoveCondition: "移除",
+  guardCondOp: "条件类型",
+  guardCondContains: "包含文本",
+  guardCondNotContains: "不包含文本",
+  guardCondRegex: "正则匹配",
+  guardCondDateOlder: "日期超过天数",
+  guardCondValue: "比较内容",
+  guardCondPattern: "正则模式",
+  guardCondDays: "最大允许天数",
+  guardCondFormat: "日期格式",
+  guardCondDateRegex: "日期正则（可选）",
+  guardCondInRegion: "在命中段中查找",
+  guardCondInMessage: "在整条消息中查找",
+  guardCondIfNoDate: "未找到日期时视为成立",
+  guardHint:
+    "对 matcher 提取的命中段求值。建议先用 regex 捕获日期，再在此判断。拦截仅影响本条待发消息；终止规则不影响其他 priority 规则。",
 
   cfgFrom: "查找",
   cfgTo: "替换为",
@@ -137,6 +164,7 @@ export const MODULE_OPTIONS: { value: string; label: string }[] = [
   { value: "prepend", label: UI.modulePrepend },
   { value: "append", label: UI.moduleAppend },
   { value: "split", label: UI.moduleSplit },
+  { value: "guard", label: UI.moduleGuard },
 ];
 
 export const STEP_OPTIONS: { value: string; label: string }[] = [

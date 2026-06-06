@@ -66,7 +66,8 @@ export interface ProcessResponseWire {
   segments: ProcessSegmentWire[];
   effects: ProcessEffectWire[];
   unchanged: boolean;
-  output: string | string[];
+  dropped?: boolean;
+  output: string | string[] | null;
 }
 
 export type TestScope = "all" | "selected";

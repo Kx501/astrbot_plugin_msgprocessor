@@ -59,6 +59,63 @@
       ]
     },
     {
+      "id": "block_stale_news",
+      "enabled": false,
+      "priority": 12,
+      "limits": { "max_matches": 1 },
+      "steps": [
+        {
+          "id": "match_block",
+          "config": {
+            "matcher": { "type": "passthrough" },
+            "region": { "kind": "match" },
+            "steps": [
+              {
+                "id": "guard",
+                "config": {
+                  "logic": "all",
+                  "conditions": [{ "op": "date_older_than", "days": 7, "in": "region" }],
+                  "when_true": "block",
+                  "when_false": "pass"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "block_stale_news_by_field",
+      "enabled": false,
+      "priority": 11,
+      "limits": { "max_matches": 1 },
+      "steps": [
+        {
+          "id": "match_block",
+          "config": {
+            "matcher": {
+              "type": "regex",
+              "pattern": "发布日期[:：]\\s*(\\d{4}-\\d{2}-\\d{2})"
+            },
+            "region": { "kind": "group", "index": 1 },
+            "steps": [
+              {
+                "id": "guard",
+                "config": {
+                  "logic": "all",
+                  "conditions": [
+                    { "op": "date_older_than", "days": 7, "format": "%Y-%m-%d", "in": "region" }
+                  ],
+                  "when_true": "block",
+                  "when_false": "pass"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "simple_prefix",
       "enabled": true,
       "priority": 5,

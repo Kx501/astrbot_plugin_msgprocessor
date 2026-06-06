@@ -9,11 +9,14 @@ from __future__ import annotations
 import re
 from typing import Any, Callable
 
+from .conditions import eval_conditions
 from .models import MatchHit, ModuleResult, ProcessingContext
 
 ModuleFn = Callable[[str, dict[str, Any], ProcessingContext, MatchHit | None], ModuleResult]
 
 _BACKSLASH_PLACEHOLDER = "\x00"
+
+_GUARD_OUTCOMES = frozenset({"pass", "block", "stop_rule"})
 
 
 def _unescape_config_literal(s: str) -> str:
@@ -38,20 +41,44 @@ def _parse_regex_flags(raw: Any) -> int:
     return bits
 
 
+def _parse_guard_outcome(raw: Any, *, default: str = "pass") -> str:
+    s = str(raw or default).strip().lower()
+    return s if s in _GUARD_OUTCOMES else default
+
+
+def _guard_result(text: str, outcome: str) -> ModuleResult:
+    if outcome == "block":
+        return ModuleResult(text="", drop=True)
+    if outcome == "stop_rule":
+        return ModuleResult(text, end_rule=True)
+    return ModuleResult(text)
+
+
+def mod_guard(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
+    """条件守卫：对命中段求值，按成立/不成立分别执行 pass / block / stop_rule。"""
+    _ = hit
+    full = ctx.message if isinstance(ctx.message, str) else text
+    matched = eval_conditions(text, full, cfg)
+    key = "when_true" if matched else "when_false"
+    default = "pass" if key == "when_false" else "pass"
+    outcome = _parse_guard_outcome(cfg.get(key), default=default)
+    return _guard_result(text, outcome)
+
+
 def mod_noop(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
+    _ = cfg, ctx, hit
     return ModuleResult(text)
 
 
 def mod_replace(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
     """在命中段内替换：默认字面量；可选 regex 模式（re.sub）。"""
+    _ = ctx, hit
     out = text
     old = cfg.get("from")
     whole_from_empty = bool(cfg.get("whole_from_empty", False))
     from_is_empty = (not isinstance(old, str)) or old == ""
     to_val = str(cfg.get("to", ""))
 
-    # 保持旧语义：from 为空字符串/未填时不做任何替换（no-op）
-    # 可选开关：whole_from_empty 打开时，from 为空则对“命中段全文”执行替换
     if from_is_empty:
         if whole_from_empty:
             return ModuleResult(to_val)
@@ -64,7 +91,6 @@ def mod_replace(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: Mat
             return ModuleResult(out)
         return ModuleResult(out)
 
-    # from 非空时：按 str.replace 对命中段做全文替换
     out = out.replace(old, to_val)
     return ModuleResult(out)
 
@@ -76,18 +102,19 @@ def translate_llm_fallback(text: str, cfg: dict[str, Any]) -> str:
 
 
 def mod_append(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
+    _ = ctx, hit
     suffix = _unescape_config_literal(str(cfg.get("text", "")))
     return ModuleResult(text + suffix)
 
 
 def mod_prepend(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
     """在命中段前拼接字面量前缀（``prefix + text``）。"""
+    _ = ctx, hit
     prefix = _unescape_config_literal(str(cfg.get("prefix", "")))
     return ModuleResult(prefix + text)
 
 
 def _apply_boundary_trim(parts: list[str], *, trim_start: bool, trim_end: bool) -> list[str]:
-    """按拆分边界清理换行：段首仅作用于首段之后，段尾仅作用于最后尾段之前。"""
     n = len(parts)
     out: list[str] = []
     for i, part in enumerate(parts):
@@ -147,19 +174,17 @@ def mod_split(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: Match
 
 def mod_delete(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
     """删除命中段内所有与 ``from`` 相同的字面量（整段替换为空）。"""
+    _ = ctx, hit
     out = text
     old = cfg.get("from")
     whole_from_empty = bool(cfg.get("whole_from_empty", False))
     from_is_empty = (not isinstance(old, str)) or old == ""
 
-    # 保持旧语义：from 为空字符串/未填时不做任何删除（no-op）
-    # 可选开关：whole_from_empty 打开时，from 为空则对“命中段全文”执行删除
     if from_is_empty:
         if whole_from_empty:
             return ModuleResult("")
         return ModuleResult(out)
 
-    # from 非空时：按 str.replace 删除命中段内所有匹配子串
     out = out.replace(old, "")
     return ModuleResult(out)
 
@@ -172,6 +197,7 @@ BUILTIN_MODULES: dict[str, ModuleFn] = {
     "append": mod_append,
     "split": mod_split,
     "split_by_marker": mod_split,
+    "guard": mod_guard,
 }
 
 

@@ -38,8 +38,10 @@ class ProcessingContext:
 @dataclass
 class ModuleResult:
     text: str
-    # 为 True 时不采纳本步的 text，保持进入本步前的命中段并继续执行后续模块
-    skip_rule: bool = False
+    # 为 True 时拦截本条待发消息（不发送）
+    drop: bool = False
+    # 为 True 时终止所在规则的后续步骤（不拦截发送）
+    end_rule: bool = False
     # 非空时表示将命中段拆为多条消息；text 为拆分后首段（供未感知拆分的调用方回退）
     split_parts: list[str] | None = None
 
@@ -66,12 +68,15 @@ class ProcessResult:
     input: str
     segments: list[ProcessSegment]
     effects: list[ProcessEffect] = field(default_factory=list)
+    dropped: bool = False
 
     @property
     def unchanged(self) -> bool:
-        return len(self.segments) == 1 and self.segments[0].text == self.input
+        return not self.dropped and len(self.segments) == 1 and self.segments[0].text == self.input
 
-    def to_legacy_output(self) -> str | list[str]:
+    def to_legacy_output(self) -> str | list[str] | None:
+        if self.dropped:
+            return None
         texts = [s.text for s in self.segments]
         if not texts:
             return ""
@@ -88,5 +93,6 @@ class ProcessResult:
                 {"kind": e.kind, "rule_id": e.rule_id, "detail": e.detail} for e in self.effects
             ],
             "unchanged": self.unchanged,
+            "dropped": self.dropped,
             "output": self.to_legacy_output(),
         }

@@ -22,6 +22,19 @@ import { newKey } from "../types";
 
 const MODULE_VALUES = new Set(MODULE_OPTIONS.map((o) => o.value));
 
+const GUARD_OUTCOMES = [
+  { value: "pass", label: UI.guardOutcomePass },
+  { value: "block", label: UI.guardOutcomeBlock },
+  { value: "stop_rule", label: UI.guardOutcomeStopRule },
+] as const;
+
+const GUARD_COND_OPS = [
+  { value: "contains", label: UI.guardCondContains },
+  { value: "not_contains", label: UI.guardCondNotContains },
+  { value: "regex", label: UI.guardCondRegex },
+  { value: "date_older_than", label: UI.guardCondDateOlder },
+] as const;
+
 export function defaultConfig(mid: string): Record<string, unknown> {
   switch (mid) {
     case "replace":
@@ -36,6 +49,13 @@ export function defaultConfig(mid: string): Record<string, unknown> {
       return { from: "", whole_from_empty: false };
     case "split":
       return { marker: "[SPLIT]", delete_marker: true, trim_part_start: true, trim_part_end: true };
+    case "guard":
+      return {
+        logic: "all",
+        conditions: [{ op: "date_older_than", days: 7, format: "%Y-%m-%d", in: "region" }],
+        when_true: "block",
+        when_false: "pass",
+      };
     default:
       return {};
   }
@@ -233,9 +253,170 @@ function ModuleConfigFields({
           <p className="muted pipeline-config-hint">{UI.cfgSplitHint}</p>
         </div>
       );
+    case "guard":
+      return <GuardConfigFields c={c} set={set} />;
     default:
       return <p className="muted">{UI.cfgNone}</p>;
   }
+}
+
+function GuardConfigFields({
+  c,
+  set,
+}: {
+  c: Record<string, unknown>;
+  set: (patch: Record<string, unknown>) => void;
+}) {
+  const conditions = Array.isArray(c.conditions) ? (c.conditions as Record<string, unknown>[]) : [];
+
+  const setConditions = (next: Record<string, unknown>[]) => set({ conditions: next });
+
+  const updateCond = (idx: number, patch: Record<string, unknown>) => {
+    const next = conditions.map((row, i) => (i === idx ? { ...row, ...patch } : row));
+    setConditions(next);
+  };
+
+  return (
+    <div className="field-stack field-stack--block">
+      <label className="field-stack">
+        <span className="label-text">{UI.guardLogic}</span>
+        <select value={String(c.logic ?? "all")} onChange={(e) => set({ logic: e.target.value })}>
+          <option value="all">{UI.guardLogicAll}</option>
+          <option value="any">{UI.guardLogicAny}</option>
+        </select>
+      </label>
+      <div className="guard-conditions">
+        {conditions.map((cond, idx) => {
+          const op = String(cond.op ?? "contains");
+          return (
+            <div key={idx} className="guard-condition-card">
+              <label className="field-stack">
+                <span className="label-text">{UI.guardCondOp}</span>
+                <select
+                  value={op}
+                  onChange={(e) => updateCond(idx, { op: e.target.value })}
+                >
+                  {GUARD_COND_OPS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {(op === "contains" || op === "not_contains") && (
+                <label className="field-stack">
+                  <span className="label-text">{UI.guardCondValue}</span>
+                  <input
+                    value={String(cond.value ?? "")}
+                    onChange={(e) => updateCond(idx, { value: e.target.value })}
+                  />
+                </label>
+              )}
+              {op === "regex" && (
+                <label className="field-stack">
+                  <span className="label-text">{UI.guardCondPattern}</span>
+                  <input
+                    value={String(cond.pattern ?? "")}
+                    onChange={(e) => updateCond(idx, { pattern: e.target.value })}
+                  />
+                </label>
+              )}
+              {op === "date_older_than" && (
+                <>
+                  <label className="field-stack">
+                    <span className="label-text">{UI.guardCondDays}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={String(cond.days ?? 7)}
+                      onChange={(e) => updateCond(idx, { days: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label className="field-stack">
+                    <span className="label-text">{UI.guardCondFormat}</span>
+                    <input
+                      value={String(cond.format ?? "%Y-%m-%d")}
+                      onChange={(e) => updateCond(idx, { format: e.target.value })}
+                    />
+                  </label>
+                  <label className="field-stack">
+                    <span className="label-text">{UI.guardCondDateRegex}</span>
+                    <input
+                      value={String(cond.regex ?? "")}
+                      onChange={(e) => updateCond(idx, { regex: e.target.value })}
+                    />
+                  </label>
+                  <label className="field-stack">
+                    <span className="label-text">{UI.fieldRegionKind}</span>
+                    <select
+                      value={String(cond.in ?? "region")}
+                      onChange={(e) => updateCond(idx, { in: e.target.value })}
+                    >
+                      <option value="region">{UI.guardCondInRegion}</option>
+                      <option value="message">{UI.guardCondInMessage}</option>
+                    </select>
+                  </label>
+                  <label className="field-inline-check">
+                    <input
+                      type="checkbox"
+                      checked={String(cond.if_no_date ?? "false") === "true"}
+                      onChange={(e) =>
+                        updateCond(idx, { if_no_date: e.target.checked ? "true" : "false" })
+                      }
+                    />
+                    <span>{UI.guardCondIfNoDate}</span>
+                  </label>
+                </>
+              )}
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setConditions(conditions.filter((_, i) => i !== idx))}
+              >
+                {UI.guardRemoveCondition}
+              </button>
+            </div>
+          );
+        })}
+        <button
+          type="button"
+          className="btn"
+          onClick={() =>
+            setConditions([...conditions, { op: "contains", value: "" }])
+          }
+        >
+          {UI.guardAddCondition}
+        </button>
+      </div>
+      <label className="field-stack">
+        <span className="label-text">{UI.guardWhenTrue}</span>
+        <select
+          value={String(c.when_true ?? "pass")}
+          onChange={(e) => set({ when_true: e.target.value })}
+        >
+          {GUARD_OUTCOMES.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="field-stack">
+        <span className="label-text">{UI.guardWhenFalse}</span>
+        <select
+          value={String(c.when_false ?? "pass")}
+          onChange={(e) => set({ when_false: e.target.value })}
+        >
+          {GUARD_OUTCOMES.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="muted pipeline-config-hint">{UI.guardHint}</p>
+    </div>
+  );
 }
 
 export function PipelineEditor({

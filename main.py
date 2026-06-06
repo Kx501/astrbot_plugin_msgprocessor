@@ -17,7 +17,7 @@ from astrbot.api.message_components import Plain
 from astrbot.api.star import Context, Star, StarTools
 
 from .core.config import build_config, parse_delay_policy
-from .core.engine import process_text_async
+from .core.engine import process_message_async
 from .core.loader import load_rules_from_path
 from .core.modules import translate_llm_fallback
 from .core.outbound import plain_char_count, send_follow_ups
@@ -97,8 +97,12 @@ def _patch_send(star: Any) -> None:
             umo = session if isinstance(session, str) else str(session)
             doc = ref._rules_doc()
             meta = {"translate_llm": ref._translate_llm(None, proactive_umo=umo)}
-            first, rest = await ref._split_chain(chain, doc, meta)
+            first, rest, dropped = await ref._split_chain(chain, doc, meta)
+            if dropped:
+                return True
             chain[:] = first
+            if not chain:
+                return True
             ok = await orig(self_ctx, session, message_chain)
             delay = parse_delay_policy(ref._cfg)
 
@@ -210,7 +214,7 @@ class MsgProcessorStar(Star):
         chain: list[Any],
         doc: dict[str, Any],
         meta: dict[str, Any],
-    ) -> tuple[list[Any], list[list[Any]]]:
+    ) -> tuple[list[Any], list[list[Any]], bool]:
         batches: list[list[Any]] = [[]]
 
         for comp in chain:
@@ -219,10 +223,13 @@ class MsgProcessorStar(Star):
                 batches[-1].append(comp)
                 continue
 
-            out = await process_text_async(doc, text, meta=meta)
-            if isinstance(out, list):
-                parts = out if out else [""]
-                for idx, part in enumerate(parts):
+            result = await process_message_async(doc, text, meta=meta)
+            if result.dropped or not result.segments:
+                continue
+
+            texts = [s.text for s in result.segments]
+            if len(texts) > 1:
+                for idx, part in enumerate(texts):
                     new_comp = _plain(comp, part)
                     if idx == 0:
                         batches[-1].append(new_comp)
@@ -230,6 +237,7 @@ class MsgProcessorStar(Star):
                         batches.append([new_comp])
                 continue
 
+            out = texts[0]
             if out != text:
                 try:
                     setattr(comp, "text", out)
@@ -238,15 +246,15 @@ class MsgProcessorStar(Star):
             batches[-1].append(comp)
 
         if not batches:
-            return chain, []
+            return [], [], True
         first = batches[0]
         rest = batches[1:]
         while first and not _has_content(first) and rest:
             first = rest.pop(0)
         rest = [b for b in rest if _has_content(b)]
         if not _has_content(first):
-            return chain, []
-        return first, rest
+            return [], [], True
+        return first, rest, False
 
     def _translate_llm(
         self,
@@ -302,7 +310,10 @@ class MsgProcessorStar(Star):
 
             doc = self._rules_doc()
             meta = {"translate_llm": self._translate_llm(event)}
-            first, rest = await self._split_chain(chain, doc, meta)
+            first, rest, dropped = await self._split_chain(chain, doc, meta)
+            if dropped:
+                chain.clear()
+                return
             chain[:] = first
             if rest:
                 event.set_extra(_EXTRA_PENDING, rest)

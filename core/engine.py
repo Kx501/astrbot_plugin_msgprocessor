@@ -7,7 +7,7 @@ from typing import Any
 from .models import ProcessResult, ProcessSegment
 from .steps import RuleExecContext, normalize_rule_steps, run_rule_steps, run_rule_steps_async
 
-ProcessOutput = str | list[str]
+ProcessOutput = str | list[str] | None
 
 
 def _sort_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -49,6 +49,8 @@ def _apply_rule(message: str, rule: dict[str, Any], meta: dict[str, Any]) -> Pro
         stop_rule=False,
     )
     run_rule_steps(ctx, steps)
+    if ctx.dropped:
+        return None
     if ctx.split_parts:
         return ctx.split_parts
     return ctx.message
@@ -68,17 +70,30 @@ async def _apply_rule_async(message: str, rule: dict[str, Any], meta: dict[str, 
         stop_rule=False,
     )
     await run_rule_steps_async(ctx, steps)
+    if ctx.dropped:
+        return None
     if ctx.split_parts:
         return ctx.split_parts
     return ctx.message
 
 
 def _fan_out_rule_results(pending: list[str], result: ProcessOutput) -> list[str]:
+    if result is None:
+        return pending
     if isinstance(result, list):
         pending.extend(result)
         return pending
     pending.append(result)
     return pending
+
+
+def _build_process_result(message: str, pending: list[str]) -> ProcessResult:
+    dropped = not pending and bool(message.strip())
+    return ProcessResult(
+        input=message,
+        segments=_segments_from_pending(pending),
+        dropped=dropped,
+    )
 
 
 def _segments_from_pending(pending: list[str]) -> list[ProcessSegment]:
@@ -101,7 +116,7 @@ def process_message(
         for msg in pending:
             _fan_out_rule_results(next_pending, _apply_rule(msg, rule, meta))
         pending = next_pending
-    return ProcessResult(input=message, segments=_segments_from_pending(pending))
+    return _build_process_result(message, pending)
 
 
 async def process_message_async(
@@ -118,7 +133,7 @@ async def process_message_async(
         for msg in pending:
             _fan_out_rule_results(next_pending, await _apply_rule_async(msg, rule, meta))
         pending = next_pending
-    return ProcessResult(input=message, segments=_segments_from_pending(pending))
+    return _build_process_result(message, pending)
 
 
 def process_text(
@@ -128,7 +143,7 @@ def process_text(
     meta: dict[str, Any] | None = None,
     rule_ids: list[str] | None = None,
 ) -> ProcessOutput:
-    return process_message(rules_doc, message, meta=meta, rule_ids=rule_ids).to_legacy_output()
+    return process_message(rules_doc, message, meta=meta, rule_ids=rule_ids).to_legacy_output() or ""
 
 
 async def process_text_async(
@@ -139,7 +154,8 @@ async def process_text_async(
     rule_ids: list[str] | None = None,
 ) -> ProcessOutput:
     result = await process_message_async(rules_doc, message, meta=meta, rule_ids=rule_ids)
-    return result.to_legacy_output()
+    legacy = result.to_legacy_output()
+    return legacy if legacy is not None else ""
 
 
 def process_with_rules(rules_doc: dict[str, Any], message: str, *, meta: dict[str, Any]) -> ProcessOutput:

@@ -19,7 +19,7 @@ function ProcessOutputPanel({ result }: { result: ProcessResponseWire | null }) 
     return <p className="muted test-output-empty">{UI.testOutputPlaceholder}</p>;
   }
 
-  if (result.segments.length === 0) {
+  if (result.dropped || result.segments.length === 0) {
     return <p className="test-output-drop">{UI.testOutputDropped}</p>;
   }
 
