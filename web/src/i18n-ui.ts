@@ -97,9 +97,10 @@ export const UI = {
     "译向与提示词在插件配置中设置；测试时仅展示回退标记。",
   cfgSplitMarker: "拆分标记",
   cfgDeleteMarker: "删除标记",
-  cfgTrimEdgeNewlines: "清理首尾换行",
+  cfgTrimPartStart: "清理段首换行",
+  cfgTrimPartEnd: "清理段尾换行",
   cfgSplitHint:
-    "将命中段按标记拆为多条消息；典型场景为 LLM 长回复分段发送。支持转义：\\n 换行、\\t 制表符、\\\\ 反斜杠。",
+    "将命中段按标记拆为多条消息。段首换行作用于首段之后（标记后的换行）；段尾换行作用于尾段之前（标记前的换行）；整条消息末尾换行会保留。支持转义：\\n、\\t、\\\\。",
   cfgNone: "此模块无额外参数",
 
   moduleLabel: "模块类型",
@@ -125,6 +126,7 @@ export const UI = {
   themeLight: "浅色",
   themeDark: "深色",
   themeCycleAria: "切换界面主题",
+  scrollToTop: "回到顶部",
 } as const;
 
 export const MODULE_OPTIONS: { value: string; label: string }[] = [

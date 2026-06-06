@@ -35,7 +35,7 @@ export function defaultConfig(mid: string): Record<string, unknown> {
     case "delete":
       return { from: "", whole_from_empty: false };
     case "split":
-      return { marker: "[SPLIT]", delete_marker: true, trim_edge_newlines: true };
+      return { marker: "[SPLIT]", delete_marker: true, trim_part_start: true, trim_part_end: true };
     default:
       return {};
   }
@@ -204,22 +204,32 @@ function ModuleConfigFields({
             <span className="label-text">{UI.cfgSplitMarker}</span>
             <input value={String(c.marker ?? "")} onChange={(e) => set({ marker: e.target.value })} />
           </label>
-          <label className="field-inline-check field-inline-check--solo">
-            <input
-              type="checkbox"
-              checked={Boolean(c.delete_marker ?? true)}
-              onChange={(e) => set({ delete_marker: e.target.checked })}
-            />
-            <span>{UI.cfgDeleteMarker}</span>
-          </label>
-          <label className="field-inline-check field-inline-check--solo">
-            <input
-              type="checkbox"
-              checked={Boolean(c.trim_edge_newlines ?? true)}
-              onChange={(e) => set({ trim_edge_newlines: e.target.checked })}
-            />
-            <span>{UI.cfgTrimEdgeNewlines}</span>
-          </label>
+          <div className="pipeline-check-row">
+            <label className="field-inline-check">
+              <input
+                type="checkbox"
+                checked={Boolean(c.delete_marker ?? true)}
+                onChange={(e) => set({ delete_marker: e.target.checked })}
+              />
+              <span>{UI.cfgDeleteMarker}</span>
+            </label>
+            <label className="field-inline-check">
+              <input
+                type="checkbox"
+                checked={Boolean(c.trim_part_start ?? true)}
+                onChange={(e) => set({ trim_part_start: e.target.checked })}
+              />
+              <span>{UI.cfgTrimPartStart}</span>
+            </label>
+            <label className="field-inline-check">
+              <input
+                type="checkbox"
+                checked={Boolean(c.trim_part_end ?? true)}
+                onChange={(e) => set({ trim_part_end: e.target.checked })}
+              />
+              <span>{UI.cfgTrimPartEnd}</span>
+            </label>
+          </div>
           <p className="muted pipeline-config-hint">{UI.cfgSplitHint}</p>
         </div>
       );

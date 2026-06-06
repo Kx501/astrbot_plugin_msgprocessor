@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchRules, saveRules } from "./api";
 import { StepsEditor, defaultStepConfig } from "./components/StepsEditor";
+import { ScrollToTop } from "./components/ScrollToTop";
 import { TestBench } from "./components/TestBench";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { UI } from "./i18n-ui";
@@ -248,6 +249,7 @@ export default function App() {
       </div>
 
       <footer className="app-footer muted">{UI.footer}</footer>
+      <ScrollToTop />
     </div>
   );
 }

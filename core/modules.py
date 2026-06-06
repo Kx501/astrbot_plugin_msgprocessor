@@ -86,8 +86,18 @@ def mod_prepend(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: Mat
     return ModuleResult(prefix + text)
 
 
-def _trim_edge_newlines(s: str) -> str:
-    return s.strip("\n\r")
+def _apply_boundary_trim(parts: list[str], *, trim_start: bool, trim_end: bool) -> list[str]:
+    """按拆分边界清理换行：段首仅作用于首段之后，段尾仅作用于最后尾段之前。"""
+    n = len(parts)
+    out: list[str] = []
+    for i, part in enumerate(parts):
+        s = part
+        if trim_end and i < n - 1:
+            s = s.rstrip("\n\r")
+        if trim_start and i > 0:
+            s = s.lstrip("\n\r")
+        out.append(s)
+    return out
 
 
 def _split_by_marker(
@@ -95,7 +105,8 @@ def _split_by_marker(
     marker: str,
     *,
     delete_marker: bool,
-    trim_edge_newlines: bool,
+    trim_start: bool,
+    trim_end: bool,
 ) -> list[str]:
     if marker == "" or marker not in text:
         return [text]
@@ -106,8 +117,8 @@ def _split_by_marker(
         parts = [raw[0]]
         for chunk in raw[1:]:
             parts.append(marker + chunk)
-    if trim_edge_newlines:
-        parts = [_trim_edge_newlines(p) for p in parts]
+    if trim_start or trim_end:
+        parts = _apply_boundary_trim(parts, trim_start=trim_start, trim_end=trim_end)
     cleaned = [p for p in parts if p]
     return cleaned if cleaned else [text]
 
@@ -120,12 +131,14 @@ def mod_split(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: Match
         return ModuleResult(text)
     marker = _unescape_config_literal(marker_raw)
     delete_marker = bool(cfg.get("delete_marker", True))
-    trim_edges = bool(cfg.get("trim_edge_newlines", True))
+    trim_start = bool(cfg.get("trim_part_start", True))
+    trim_end = bool(cfg.get("trim_part_end", True))
     parts = _split_by_marker(
         text,
         marker,
         delete_marker=delete_marker,
-        trim_edge_newlines=trim_edges,
+        trim_start=trim_start,
+        trim_end=trim_end,
     )
     if len(parts) <= 1:
         return ModuleResult(parts[0] if parts else text)
