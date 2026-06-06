@@ -97,6 +97,7 @@ export const UI = {
     "译向与提示词在插件配置中设置；测试时仅展示回退标记。",
   cfgSplitMarker: "拆分标记",
   cfgDeleteMarker: "删除标记",
+  cfgTrimEdgeNewlines: "清理首尾换行",
   cfgSplitHint:
     "将命中段按标记拆为多条消息；典型场景为 LLM 长回复分段发送。支持转义：\\n 换行、\\t 制表符、\\\\ 反斜杠。",
   cfgNone: "此模块无额外参数",

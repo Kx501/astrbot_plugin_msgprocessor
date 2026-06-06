@@ -35,7 +35,7 @@ export function defaultConfig(mid: string): Record<string, unknown> {
     case "delete":
       return { from: "", whole_from_empty: false };
     case "split":
-      return { marker: "[SPLIT]", delete_marker: true };
+      return { marker: "[SPLIT]", delete_marker: true, trim_edge_newlines: true };
     default:
       return {};
   }
@@ -211,6 +211,14 @@ function ModuleConfigFields({
               onChange={(e) => set({ delete_marker: e.target.checked })}
             />
             <span>{UI.cfgDeleteMarker}</span>
+          </label>
+          <label className="field-inline-check field-inline-check--solo">
+            <input
+              type="checkbox"
+              checked={Boolean(c.trim_edge_newlines ?? true)}
+              onChange={(e) => set({ trim_edge_newlines: e.target.checked })}
+            />
+            <span>{UI.cfgTrimEdgeNewlines}</span>
           </label>
           <p className="muted pipeline-config-hint">{UI.cfgSplitHint}</p>
         </div>

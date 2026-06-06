@@ -86,7 +86,17 @@ def mod_prepend(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: Mat
     return ModuleResult(prefix + text)
 
 
-def _split_by_marker(text: str, marker: str, *, delete_marker: bool) -> list[str]:
+def _trim_edge_newlines(s: str) -> str:
+    return s.strip("\n\r")
+
+
+def _split_by_marker(
+    text: str,
+    marker: str,
+    *,
+    delete_marker: bool,
+    trim_edge_newlines: bool,
+) -> list[str]:
     if marker == "" or marker not in text:
         return [text]
     if delete_marker:
@@ -96,8 +106,9 @@ def _split_by_marker(text: str, marker: str, *, delete_marker: bool) -> list[str
         parts = [raw[0]]
         for chunk in raw[1:]:
             parts.append(marker + chunk)
-    cleaned = [p.strip() for p in parts]
-    cleaned = [p for p in cleaned if p]
+    if trim_edge_newlines:
+        parts = [_trim_edge_newlines(p) for p in parts]
+    cleaned = [p for p in parts if p]
     return cleaned if cleaned else [text]
 
 
@@ -109,7 +120,13 @@ def mod_split(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: Match
         return ModuleResult(text)
     marker = _unescape_config_literal(marker_raw)
     delete_marker = bool(cfg.get("delete_marker", True))
-    parts = _split_by_marker(text, marker, delete_marker=delete_marker)
+    trim_edges = bool(cfg.get("trim_edge_newlines", True))
+    parts = _split_by_marker(
+        text,
+        marker,
+        delete_marker=delete_marker,
+        trim_edge_newlines=trim_edges,
+    )
     if len(parts) <= 1:
         return ModuleResult(parts[0] if parts else text)
     return ModuleResult(text=parts[0], split_parts=parts)
