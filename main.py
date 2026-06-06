@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""AstrBot 入口：插件类须位于 main.py（AstrBot 约定）。仅处理待发消息的纯文本。"""
+"""AstrBot 入口：插件类须位于 main.py。仅处理待发消息纯文本。"""
 
 from __future__ import annotations
 
@@ -14,37 +14,25 @@ import uvicorn
 from astrbot.api import logger as ab_logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.message_components import Plain
-from astrbot.api.star import Context, Star, StarTools, register
+from astrbot.api.star import Context, Star, StarTools
 
+from .core.config import build_config, parse_delay_policy
 from .core.engine import process_text_async
 from .core.loader import load_rules_from_path
 from .core.modules import translate_llm_fallback
+from .core.outbound import plain_char_count, send_follow_ups
 from .core.server import create_app
 
-_PLUGIN_ROOT = Path(__file__).resolve().parent
+_ROOT = Path(__file__).resolve().parent
+_SAMPLE_RULES = _ROOT / "sample_rules.json"
+_WEB_DIST = _ROOT / "web" / "dist"
 
-# Context.send_message 补丁：主动推送不走 on_decorating_result，需单独拦截。
-_send_patch_installed = False
-_msgprocessor_star_ref: Any = None
-_PENDING_SPLIT_BATCHES_KEY = "_msgprocessor_pending_batches"
-_SAMPLE_RULES = _PLUGIN_ROOT / "sample_rules.json"
-_WEB_DIST = _PLUGIN_ROOT / "web" / "dist"
-
-
-def _default_plugin_config() -> dict[str, Any]:
-    """默认值：`sample_config.json` 仅含核心 Web 项；译向模型与提示词由 AstrBot 写入 config（见 `_conf_schema.json`）。"""
-    return {
-        "web_enabled": True,
-        "web_host": "127.0.0.1",
-        "web_port": 5878,
-        "process_messages": True,
-        "translate_llm": "default",
-        "llm_translate_prompt": "请将以下文本翻译，只输出译文，不要解释。",
-    }
+_send_patched = False
+_star_ref: Any = None
+_EXTRA_PENDING = "_mp_pending_batches"
 
 
-def _translate_llm_provider(cfg: dict[str, Any]) -> tuple[bool, str | None]:
-    """是否调用模型；(True, None) 表示用当前会话提供商；(True, id) 表示固定提供商；(False, None) 表示未配置提供商，只做前缀回退。"""
+def _llm_provider(cfg: dict[str, Any]) -> tuple[bool, str | None]:
     raw = cfg.get("translate_llm", "default")
     s = "" if raw is None else str(raw).strip()
     if not s:
@@ -54,71 +42,35 @@ def _translate_llm_provider(cfg: dict[str, Any]) -> tuple[bool, str | None]:
     return True, s
 
 
-def _load_plugin_config(data_dir: Path) -> dict[str, Any]:
-    base = _default_plugin_config()
-    path = data_dir / "config.json"
-    if not path.is_file():
-        return base
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            raw = json.load(f)
-    except Exception:
-        ab_logger.exception("MsgProcessor: 读取 config.json 失败，使用默认配置")
-        return base
-    if not isinstance(raw, dict):
-        return base
-    if "web_enabled" in raw:
-        base["web_enabled"] = bool(raw["web_enabled"])
-    if isinstance(raw.get("web_host"), str) and raw["web_host"].strip():
-        base["web_host"] = raw["web_host"].strip()
-    if "web_port" in raw:
-        try:
-            p = int(raw["web_port"])
-            if 1 <= p <= 65535:
-                base["web_port"] = p
-        except (TypeError, ValueError):
-            pass
-    if "process_messages" in raw:
-        base["process_messages"] = bool(raw["process_messages"])
-    if isinstance(raw.get("translate_llm"), str):
-        base["translate_llm"] = raw["translate_llm"].strip()
-    if "translate_llm" not in raw and "llm_translate_enabled" in raw:
-        base["translate_llm"] = "default" if raw["llm_translate_enabled"] else ""
-    if isinstance(raw.get("llm_translate_prompt"), str):
-        base["llm_translate_prompt"] = raw["llm_translate_prompt"]
-    return base
-
-
-def _build_translate_prompt(instruction: str, text: str) -> str:
-    """说明句（含译向，在 AstrBot 提示词中配置）与待译正文拼接。"""
+def _translate_prompt(instruction: str, text: str) -> str:
     head = (instruction or "").strip()
     if not head:
         head = "请将以下文本翻译成中文，只输出译文，不要解释。"
     return f"{head}\n\n{text}"
 
 
-def _plain_text_nonempty(comp: Any) -> bool:
+def _plain_nonempty(comp: Any) -> bool:
     text = getattr(comp, "text", None)
     return isinstance(text, str) and bool(text.strip())
 
 
-def _batch_has_content(batch: list[Any]) -> bool:
+def _has_content(batch: list[Any]) -> bool:
     for comp in batch:
-        if _plain_text_nonempty(comp):
+        if _plain_nonempty(comp):
             return True
         if getattr(comp, "text", None) is None:
             return True
     return False
 
 
-def _clone_plain_comp(comp: Any, text: str) -> Any:
+def _plain(comp: Any, text: str) -> Any:
     try:
         return type(comp)(text)
     except Exception:
         return Plain(text)
 
 
-def _preview_text(s: Any, max_len: int = 120) -> str:
+def _preview(s: Any, max_len: int = 120) -> str:
     text = "" if s is None else str(s)
     text = text.replace("\n", "\\n")
     if len(text) <= max_len:
@@ -126,76 +78,80 @@ def _preview_text(s: Any, max_len: int = 120) -> str:
     return text[: max_len - 3] + "..."
 
 
-def _ensure_send_message_patch(star: Any) -> None:
-    """拦截 Context.send_message，使主动推送也走同一套规则。"""
-    global _send_patch_installed, _msgprocessor_star_ref
-    _msgprocessor_star_ref = star
-    if _send_patch_installed:
+def _patch_send(star: Any) -> None:
+    global _send_patched, _star_ref
+    _star_ref = star
+    if _send_patched:
         return
-    _send_patch_installed = True
+    _send_patched = True
     orig = Context.send_message
 
-    async def send_message_wrapped(self_ctx: Any, session: Any, message_chain: Any) -> bool:
-        star_ref = _msgprocessor_star_ref
-        if star_ref is None or not star_ref._cfg.get("process_messages", True):
+    async def wrapped(self_ctx: Any, session: Any, message_chain: Any) -> bool:
+        ref = _star_ref
+        if ref is None or not ref._cfg.get("process_messages", True):
             return await orig(self_ctx, session, message_chain)
         chain = getattr(message_chain, "chain", None)
         if not isinstance(chain, list) or not chain:
             return await orig(self_ctx, session, message_chain)
         try:
             umo = session if isinstance(session, str) else str(session)
-            doc = star_ref._load_rules_doc()
-            meta = {
-                "translate_llm": star_ref._translate_llm_handler(
-                    None,
-                    proactive_umo=umo,
-                ),
-            }
-            first_batch, rest_batches = await star_ref._process_chain_into_batches(
-                chain, doc, meta
-            )
-            chain[:] = first_batch
+            doc = ref._rules_doc()
+            meta = {"translate_llm": ref._translate_llm(None, proactive_umo=umo)}
+            first, rest = await ref._split_chain(chain, doc, meta)
+            chain[:] = first
             ok = await orig(self_ctx, session, message_chain)
-            for batch in rest_batches:
-                if not _batch_has_content(batch):
-                    continue
+            delay = parse_delay_policy(ref._cfg)
+
+            async def send_one(batch: list[Any]) -> None:
                 await orig(self_ctx, session, MessageChain(batch))
+
+            await send_follow_ups(
+                rest,
+                send_one=send_one,
+                delay=delay,
+                char_count=plain_char_count,
+                has_content=_has_content,
+            )
             return ok
         except Exception:
             ab_logger.exception("MsgProcessor: send_message patch 异常")
         return await orig(self_ctx, session, message_chain)
 
-    Context.send_message = send_message_wrapped  # type: ignore[method-assign]
-    Context._msgprocessor_send_message_orig = orig  # type: ignore[attr-defined]
+    Context.send_message = wrapped  # type: ignore[method-assign]
+    Context._mp_send_message_orig = orig  # type: ignore[attr-defined]
 
 
-def _restore_send_message_patch() -> None:
-    global _send_patch_installed, _msgprocessor_star_ref
-    _msgprocessor_star_ref = None
-    orig = getattr(Context, "_msgprocessor_send_message_orig", None)
+def _unpatch_send() -> None:
+    global _send_patched, _star_ref
+    _star_ref = None
+    orig = getattr(Context, "_mp_send_message_orig", None)
     if orig is not None:
         Context.send_message = orig  # type: ignore[method-assign]
-        delattr(Context, "_msgprocessor_send_message_orig")
-    _send_patch_installed = False
+        delattr(Context, "_mp_send_message_orig")
+    _send_patched = False
 
 
 class MsgProcessorStar(Star):
-    def __init__(self, context: Context) -> None:
+    def __init__(self, context: Context, config: Any = None) -> None:
         super().__init__(context)
         self._data_dir = Path(StarTools.get_data_dir(None))
         self._data_dir.mkdir(parents=True, exist_ok=True)
         self._rules_path = self._data_dir / "rules.json"
-        self._ensure_rules_file()
-        self._cfg = _load_plugin_config(self._data_dir)
+        self._init_rules()
+        self._cfg = build_config(
+            self._data_dir,
+            config,
+            on_error=lambda _e: ab_logger.exception("MsgProcessor: 读取 config.json 失败"),
+        )
         self._rules_mtime: float | None = None
         self._rules_cache: dict[str, Any] | None = None
         self._uvicorn_server: uvicorn.Server | None = None
         self._uvicorn_thread: threading.Thread | None = None
         if self._cfg.get("web_enabled", True):
-            self._start_web_admin()
-        _ensure_send_message_patch(self)
+            self._start_web()
+        _patch_send(self)
 
-    def _ensure_rules_file(self) -> None:
+    def _init_rules(self) -> None:
         if self._rules_path.is_file():
             return
         if _SAMPLE_RULES.is_file():
@@ -206,7 +162,7 @@ class MsgProcessorStar(Star):
             with open(self._rules_path, "w", encoding="utf-8") as f:
                 json.dump(stub, f, ensure_ascii=False, indent=2)
 
-    def _load_rules_doc(self) -> dict[str, Any]:
+    def _rules_doc(self) -> dict[str, Any]:
         if not self._rules_path.is_file():
             return {"schema_version": 4, "rules": []}
         try:
@@ -224,7 +180,7 @@ class MsgProcessorStar(Star):
         self._rules_cache = doc
         return doc
 
-    def _start_web_admin(self) -> None:
+    def _start_web(self) -> None:
         host = str(self._cfg.get("web_host") or "127.0.0.1")
         try:
             port = int(self._cfg.get("web_port") or 5878)
@@ -238,7 +194,7 @@ class MsgProcessorStar(Star):
             self._uvicorn_thread.start()
             ab_logger.info("MsgProcessor: Web 配置台 http://%s:%s/", host, port)
         except Exception:
-            ab_logger.exception("MsgProcessor: Web 启动失败（可在数据目录 config.json 中设 web_enabled: false）")
+            ab_logger.exception("MsgProcessor: Web 启动失败")
 
     async def terminate(self) -> None:
         if self._uvicorn_server is not None:
@@ -247,15 +203,14 @@ class MsgProcessorStar(Star):
             if th is not None and th.is_alive():
                 await asyncio.to_thread(th.join, 3.0)
         ab_logger.info("MsgProcessor 已停止")
-        _restore_send_message_patch()
+        _unpatch_send()
 
-    async def _process_chain_into_batches(
+    async def _split_chain(
         self,
         chain: list[Any],
         doc: dict[str, Any],
         meta: dict[str, Any],
     ) -> tuple[list[Any], list[list[Any]]]:
-        """处理消息链；若规则产生拆分，则返回首条待发链与其余分条。"""
         batches: list[list[Any]] = [[]]
 
         for comp in chain:
@@ -268,7 +223,7 @@ class MsgProcessorStar(Star):
             if isinstance(out, list):
                 parts = out if out else [""]
                 for idx, part in enumerate(parts):
-                    new_comp = _clone_plain_comp(comp, part)
+                    new_comp = _plain(comp, part)
                     if idx == 0:
                         batches[-1].append(new_comp)
                     else:
@@ -279,37 +234,34 @@ class MsgProcessorStar(Star):
                 try:
                     setattr(comp, "text", out)
                 except Exception:
-                    comp = _clone_plain_comp(comp, out)
+                    comp = _plain(comp, out)
             batches[-1].append(comp)
 
         if not batches:
             return chain, []
         first = batches[0]
         rest = batches[1:]
-        while first and not _batch_has_content(first) and rest:
+        while first and not _has_content(first) and rest:
             first = rest.pop(0)
-        rest = [b for b in rest if _batch_has_content(b)]
-        if not _batch_has_content(first):
+        rest = [b for b in rest if _has_content(b)]
+        if not _has_content(first):
             return chain, []
         return first, rest
 
-    def _translate_llm_handler(
+    def _translate_llm(
         self,
         event: AstrMessageEvent | None = None,
         *,
         proactive_umo: str | None = None,
     ):
-        """供规则引擎 meta 注入；内部使用 AstrBot 的 llm_generate（需框架 ≥ 4.5.7）。"""
+        cfg = self._cfg
+        ctx = self.context
 
-        cfg_star = self._cfg
-        ctx_ab = self.context
-
-        async def translate_llm(text: str, scfg: dict[str, Any], _pctx: Any, _hit: Any) -> str:
-            use_llm, fixed_provider = _translate_llm_provider(cfg_star)
+        async def translate(text: str, scfg: dict[str, Any], _pctx: Any, _hit: Any) -> str:
+            use_llm, fixed_provider = _llm_provider(cfg)
             if not use_llm:
                 return translate_llm_fallback(text, scfg)
-            instruction = str(cfg_star.get("llm_translate_prompt") or "")
-            prompt = _build_translate_prompt(instruction, text)
+            prompt = _translate_prompt(str(cfg.get("llm_translate_prompt") or ""), text)
             try:
                 if fixed_provider is None:
                     if proactive_umo is not None:
@@ -318,31 +270,28 @@ class MsgProcessorStar(Star):
                         umo = event.unified_msg_origin
                     else:
                         return translate_llm_fallback(text, scfg)
-                    pid = await ctx_ab.get_current_chat_provider_id(umo=umo)
+                    pid = await ctx.get_current_chat_provider_id(umo=umo)
                 else:
                     pid = fixed_provider
-                resp = await ctx_ab.llm_generate(chat_provider_id=pid, prompt=prompt)
+                resp = await ctx.llm_generate(chat_provider_id=pid, prompt=prompt)
                 out = (getattr(resp, "completion_text", None) or "").strip()
                 return out if out else translate_llm_fallback(text, scfg)
             except Exception:
                 ab_logger.exception("MsgProcessor: AI翻译失败")
                 return translate_llm_fallback(text, scfg)
 
-        return translate_llm
+        return translate
 
     @filter.on_llm_response()
-    async def on_llm_response_tap(self, event: AstrMessageEvent, resp: Any) -> None:
-        """监听 LLM 回复阶段（发送前）。"""
+    async def on_llm_response(self, event: AstrMessageEvent, resp: Any) -> None:
         try:
             out = getattr(resp, "completion_text", None)
-            preview = _preview_text(out)
-            ab_logger.debug("MsgProcessor: on_llm_response preview=%s", preview)
+            ab_logger.debug("MsgProcessor: on_llm_response preview=%s", _preview(out))
         except Exception:
-            ab_logger.exception("MsgProcessor: on_llm_response 监听异常")
+            ab_logger.exception("MsgProcessor: on_llm_response 异常")
 
     @filter.on_decorating_result()
-    async def on_decorating_result_tap(self, event: AstrMessageEvent) -> None:
-        """发送前装饰阶段：对结果链中的纯文本段应用规则处理。"""
+    async def on_decorating_result(self, event: AstrMessageEvent) -> None:
         try:
             result = event.get_result()
             chain = getattr(result, "chain", None)
@@ -351,33 +300,40 @@ class MsgProcessorStar(Star):
             if not self._cfg.get("process_messages", True):
                 return
 
-            doc = self._load_rules_doc()
-            meta = {"translate_llm": self._translate_llm_handler(event)}
-            first_batch, rest_batches = await self._process_chain_into_batches(chain, doc, meta)
-            chain[:] = first_batch
-            if rest_batches:
-                event.set_extra(_PENDING_SPLIT_BATCHES_KEY, rest_batches)
+            doc = self._rules_doc()
+            meta = {"translate_llm": self._translate_llm(event)}
+            first, rest = await self._split_chain(chain, doc, meta)
+            chain[:] = first
+            if rest:
+                event.set_extra(_EXTRA_PENDING, rest)
                 ab_logger.debug(
-                    "MsgProcessor: split into %s messages (1 immediate + %s follow-up)",
-                    len(rest_batches) + 1,
-                    len(rest_batches),
+                    "MsgProcessor: split %s messages (1 now + %s follow-up)",
+                    len(rest) + 1,
+                    len(rest),
                 )
         except Exception:
-            ab_logger.exception("MsgProcessor: on_decorating_result 监听异常")
+            ab_logger.exception("MsgProcessor: on_decorating_result 异常")
 
     @filter.after_message_sent()
-    async def on_after_message_sent_splits(self, event: AstrMessageEvent) -> None:
-        """被动回复：首条由 RespondStage 发送，其余拆分段在此逐条发送。"""
-        pending = event.get_extra(_PENDING_SPLIT_BATCHES_KEY)
+    async def on_after_sent(self, event: AstrMessageEvent) -> None:
+        pending = event.get_extra(_EXTRA_PENDING)
         if not pending:
             return
-        event.set_extra(_PENDING_SPLIT_BATCHES_KEY, None)
+        event.set_extra(_EXTRA_PENDING, None)
         if not isinstance(pending, list):
             return
-        for batch in pending:
-            if not isinstance(batch, list) or not _batch_has_content(batch):
-                continue
+        delay = parse_delay_policy(self._cfg)
+
+        async def send_one(batch: list[Any]) -> None:
             try:
                 await event.send(MessageChain(batch))
             except Exception:
                 ab_logger.exception("MsgProcessor: 发送拆分消息失败")
+
+        await send_follow_ups(
+            pending,
+            send_one=send_one,
+            delay=delay,
+            char_count=plain_char_count,
+            has_content=lambda b: isinstance(b, list) and _has_content(b),
+        )

@@ -1,5 +1,12 @@
 {
   "web_enabled": true,
   "web_host": "127.0.0.1",
-  "web_port": 5878
+  "web_port": 5878,
+  "process_messages": true,
+  "batch_send_mode": "fixed",
+  "batch_send_delay": 0,
+  "batch_send_per_char": 0.05,
+  "batch_send_delay_jitter": 0,
+  "batch_send_delay_min": 0,
+  "batch_send_delay_max": 0
 }

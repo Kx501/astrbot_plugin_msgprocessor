@@ -27,5 +27,43 @@
     "type": "text",
     "default": "请将以下文本翻译成中文，只输出译文，不要解释",
     "hint": "传入模型的提示词；待译正文由程序自动追加至末尾。"
+  },
+  "batch_send_mode": {
+    "description": "批量连发间隔方式",
+    "type": "string",
+    "default": "fixed",
+    "options": ["none", "fixed", "chars"],
+    "labels": ["不延迟", "固定间隔", "按字数"],
+    "hint": "仅对规则拆分后的第 2 条及以后消息生效；单条发送不受影响。"
+  },
+  "batch_send_delay": {
+    "description": "间隔基数（秒）",
+    "type": "float",
+    "default": 0,
+    "hint": "固定间隔：每次等待该秒数。按字数：额外固定等待（可为 0）。"
+  },
+  "batch_send_per_char": {
+    "description": "每字等待（秒）",
+    "type": "float",
+    "default": 0.05,
+    "hint": "仅「按字数」：等待 ≈ 间隔基数 + 待发段字符数 × 本项。"
+  },
+  "batch_send_delay_jitter": {
+    "description": "间隔抖动（秒）",
+    "type": "float",
+    "default": 0,
+    "hint": "在计算出的等待时间上随机加减；0 表示不抖动。"
+  },
+  "batch_send_delay_min": {
+    "description": "最短等待（秒）",
+    "type": "float",
+    "default": 0,
+    "hint": "0 表示不限制。"
+  },
+  "batch_send_delay_max": {
+    "description": "最长等待（秒）",
+    "type": "float",
+    "default": 0,
+    "hint": "0 表示不限制。"
   }
 }
