@@ -147,6 +147,56 @@
       ]
     },
     {
+      "id": "goto_length_branch",
+      "enabled": false,
+      "priority": 11,
+      "limits": { "max_matches": 1 },
+      "steps": [
+        {
+          "id": "match_block",
+          "config": {
+            "matcher": { "type": "passthrough" },
+            "region": { "kind": "match" },
+            "steps": [
+              {
+                "id": "guard",
+                "label": "s1",
+                "config": {
+                  "op": "length_gt",
+                  "value": 10,
+                  "in": "region",
+                  "when_true": "goto",
+                  "when_true_goto": "s4",
+                  "when_false": "goto",
+                  "when_false_goto": "s2"
+                }
+              },
+              {
+                "id": "prepend",
+                "label": "s2",
+                "config": { "prefix": "[短] " }
+              },
+              {
+                "id": "guard",
+                "label": "s3",
+                "config": {
+                  "op": "length_gte",
+                  "value": 0,
+                  "when_true": "stop_rule",
+                  "when_false": "stop_rule"
+                }
+              },
+              {
+                "id": "prepend",
+                "label": "s4",
+                "config": { "prefix": "[长] " }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "simple_prefix",
       "enabled": true,
       "priority": 5,

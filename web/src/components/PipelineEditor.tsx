@@ -18,7 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 import type { CSSProperties } from "react";
 import { GUARD_CMP_BY_KIND, GUARD_KIND_OPTIONS, MODULE_OPTIONS, UI, moduleLabel } from "../i18n-ui";
 import type { PipelineStepUI } from "../types";
-import { newKey } from "../types";
+import { newKey, normalizePipelineLabels } from "../types";
 
 const MODULE_VALUES = new Set(MODULE_OPTIONS.map((o) => o.value));
 
@@ -26,7 +26,25 @@ const GUARD_OUTCOMES = [
   { value: "pass", label: UI.guardOutcomePass },
   { value: "block", label: UI.guardOutcomeBlock },
   { value: "stop_rule", label: UI.guardOutcomeStopRule },
+  { value: "goto", label: UI.guardOutcomeGoto },
 ] as const;
+
+function pipelineGotoLabels(pipeline: PipelineStepUI[], excludeKey: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const step of pipeline) {
+    if (step._key === excludeKey) {
+      continue;
+    }
+    const raw = typeof step.label === "string" ? step.label.trim() : "";
+    if (!raw || seen.has(raw)) {
+      continue;
+    }
+    seen.add(raw);
+    out.push(raw);
+  }
+  return out;
+}
 
 type GuardKind = "date" | "number" | "length";
 type GuardCmp = "older_than" | "gt" | "gte" | "lt" | "lte" | "eq" | "ne";
@@ -97,10 +115,12 @@ export function defaultConfig(mid: string): Record<string, unknown> {
 
 function SortableRow({
   step,
+  pipeline,
   onChange,
   onRemove,
 }: {
   step: PipelineStepUI;
+  pipeline: PipelineStepUI[];
   onChange: (s: PipelineStepUI) => void;
   onRemove: () => void;
 }) {
@@ -138,12 +158,18 @@ function SortableRow({
             ))}
           </select>
         </label>
+        <div className="field-stack pipeline-step-label pipeline-step-label--auto">
+          <span className="label-text">{UI.stepLabelField}</span>
+          <span className="pipeline-step-label-value" title={UI.guardGotoHint}>
+            {UI.stepLabelAuto(String(step.label ?? ""))}
+          </span>
+        </div>
         <button type="button" className="btn btn-ghost pipeline-row-remove" onClick={onRemove}>
           {UI.removeStep}
         </button>
       </div>
       <div className="pipeline-row-bottom">
-        <ModuleConfigFields step={step} onChange={onChange} />
+        <ModuleConfigFields step={step} pipeline={pipeline} onChange={onChange} />
       </div>
     </div>
   );
@@ -151,9 +177,11 @@ function SortableRow({
 
 function ModuleConfigFields({
   step,
+  pipeline,
   onChange,
 }: {
   step: PipelineStepUI;
+  pipeline: PipelineStepUI[];
   onChange: (s: PipelineStepUI) => void;
 }) {
   const c = step.config;
@@ -288,18 +316,82 @@ function ModuleConfigFields({
         </div>
       );
     case "guard":
-      return <GuardConfigFields c={c} set={set} />;
+      return (
+        <GuardConfigFields
+          c={c}
+          set={set}
+          pipeline={pipeline}
+          stepKey={step._key}
+        />
+      );
     default:
       return <p className="muted">{UI.cfgNone}</p>;
   }
 }
 
+function GuardOutcomeField({
+  label,
+  outcomeKey,
+  gotoKey,
+  c,
+  set,
+  gotoLabels,
+}: {
+  label: string;
+  outcomeKey: "when_true" | "when_false";
+  gotoKey: "when_true_goto" | "when_false_goto";
+  c: Record<string, unknown>;
+  set: (patch: Record<string, unknown>) => void;
+  gotoLabels: string[];
+}) {
+  const outcome = String(c[outcomeKey] ?? "pass");
+  return (
+    <div className="field-stack">
+      <span className="label-text">{label}</span>
+      <select
+        value={outcome}
+        onChange={(e) => {
+          const next = e.target.value;
+          const patch: Record<string, unknown> = { [outcomeKey]: next };
+          if (next !== "goto") {
+            patch[gotoKey] = "";
+          }
+          set(patch);
+        }}
+      >
+        {GUARD_OUTCOMES.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      {outcome === "goto" && (
+        <select
+          value={String(c[gotoKey] ?? "")}
+          onChange={(e) => set({ [gotoKey]: e.target.value })}
+        >
+          <option value="">{UI.guardGotoUnset}</option>
+          {gotoLabels.map((lab) => (
+            <option key={lab} value={lab}>
+              {lab}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+}
+
 function GuardConfigFields({
   c,
   set,
+  pipeline,
+  stepKey,
 }: {
   c: Record<string, unknown>;
   set: (patch: Record<string, unknown>) => void;
+  pipeline: PipelineStepUI[];
+  stepKey: string;
 }) {
   const op = String(c.op ?? "date_older_than");
   const { kind, cmp } = parseGuardOp(op);
@@ -307,6 +399,8 @@ function GuardConfigFields({
   const isDate = kind === "date";
   const isNumber = kind === "number";
   const isLength = kind === "length";
+
+  const gotoLabels = pipelineGotoLabels(pipeline, stepKey);
 
   const inSelect = (
     <label className="field-stack">
@@ -441,34 +535,27 @@ function GuardConfigFields({
         </>
       )}
       <div className="form-grid-regex">
-        <label className="field-stack">
-          <span className="label-text">{UI.guardWhenTrue}</span>
-          <select
-            value={String(c.when_true ?? "pass")}
-            onChange={(e) => set({ when_true: e.target.value })}
-          >
-            {GUARD_OUTCOMES.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field-stack">
-          <span className="label-text">{UI.guardWhenFalse}</span>
-          <select
-            value={String(c.when_false ?? "pass")}
-            onChange={(e) => set({ when_false: e.target.value })}
-          >
-            {GUARD_OUTCOMES.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <GuardOutcomeField
+          label={UI.guardWhenTrue}
+          outcomeKey="when_true"
+          gotoKey="when_true_goto"
+          c={c}
+          set={set}
+          gotoLabels={gotoLabels}
+        />
+        <GuardOutcomeField
+          label={UI.guardWhenFalse}
+          outcomeKey="when_false"
+          gotoKey="when_false_goto"
+          c={c}
+          set={set}
+          gotoLabels={gotoLabels}
+        />
       </div>
       <p className="muted pipeline-config-hint">{UI.guardHint}</p>
+      {(String(c.when_true) === "goto" || String(c.when_false) === "goto") && (
+        <p className="muted pipeline-config-hint">{UI.guardGotoHint}</p>
+      )}
     </div>
   );
 }
@@ -485,18 +572,20 @@ export function PipelineEditor({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  const emit = (next: PipelineStepUI[]) => onChange(normalizePipelineLabels(next));
+
   const onDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
     if (!over || active.id === over.id) return;
     const oldIndex = pipeline.findIndex((x) => x._key === active.id);
     const newIndex = pipeline.findIndex((x) => x._key === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
-    onChange(arrayMove(pipeline, oldIndex, newIndex));
+    emit(arrayMove(pipeline, oldIndex, newIndex));
   };
 
   const add = () => {
     const mid = "noop";
-    onChange([...pipeline, { _key: newKey(), id: mid, config: defaultConfig(mid) }]);
+    emit([...pipeline, { _key: newKey(), id: mid, label: "", config: defaultConfig(mid) }]);
   };
 
   return (
@@ -514,12 +603,13 @@ export function PipelineEditor({
               <SortableRow
                 key={step._key}
                 step={step}
+                pipeline={pipeline}
                 onChange={(s) => {
                   const next = [...pipeline];
                   next[i] = s;
-                  onChange(next);
+                  emit(next);
                 }}
-                onRemove={() => onChange(pipeline.filter((_, j) => j !== i))}
+                onRemove={() => emit(pipeline.filter((_, j) => j !== i))}
               />
             ))}
           </div>

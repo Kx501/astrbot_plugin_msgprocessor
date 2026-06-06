@@ -16,6 +16,9 @@ AsyncStepFn = Callable[["RuleExecContext", dict[str, Any]], Awaitable[None]]
 TranslateLlmSync = Callable[[str, dict[str, Any], ProcessingContext, MatchHit], str]
 TranslateLlmAsync = Callable[[str, dict[str, Any], ProcessingContext, MatchHit], Awaitable[str]]
 
+# goto 循环保护：线性执行最多 n 次，额外允许少量回跳（正常规则远用不满）
+_INNER_PIPELINE_MAX_EXTRA_ITERS = 20
+
 
 def _non_overlapping_hits(hits: list[MatchHit]) -> list[MatchHit]:
     ordered = sorted(hits, key=lambda h: (h.region_span.start, h.region_span.end))
@@ -61,6 +64,7 @@ class RuleExecContext:
 class _StepEffect:
     dropped: bool = False
     end_rule: bool = False
+    goto: str | None = None
 
 
 @dataclass
@@ -116,7 +120,31 @@ async def _apply_one_module_step_async(
 
 
 def _effect_from_result(res: ModuleResult) -> _StepEffect:
-    return _StepEffect(dropped=bool(res.drop), end_rule=bool(res.end_rule))
+    goto = res.goto if isinstance(res.goto, str) and res.goto.strip() else None
+    return _StepEffect(dropped=bool(res.drop), end_rule=bool(res.end_rule), goto=goto)
+
+
+def _build_step_label_index(steps: list) -> dict[str, int]:
+    labels: dict[str, int] = {}
+    for i, st in enumerate(steps):
+        if not isinstance(st, dict):
+            continue
+        raw = st.get("label")
+        if not isinstance(raw, str):
+            continue
+        key = raw.strip()
+        if key and key not in labels:
+            labels[key] = i
+    return labels
+
+
+def _resolve_goto_index(labels: dict[str, int], target: str | None, *, fallback: int) -> int:
+    if not target:
+        return fallback
+    idx = labels.get(target.strip())
+    if idx is None:
+        return fallback
+    return idx
 
 
 def _consume_module_result(
@@ -126,6 +154,8 @@ def _consume_module_result(
     if eff.dropped:
         return text, None, eff
     if eff.end_rule:
+        return res.text, None, eff
+    if eff.goto:
         return res.text, None, eff
     if res.split_parts:
         return res.text, res.split_parts, _StepEffect()
@@ -147,6 +177,10 @@ def _run_parts_through_step(
         new_text, split_parts, step_eff = _consume_module_result(part, res)
         if step_eff.dropped:
             continue
+        if step_eff.goto:
+            eff.goto = step_eff.goto
+            out.append(new_text)
+            return out, eff
         if step_eff.end_rule:
             eff.end_rule = True
             out.append(new_text)
@@ -173,6 +207,10 @@ async def _run_parts_through_step_async(
         new_text, split_parts, step_eff = _consume_module_result(part, res)
         if step_eff.dropped:
             continue
+        if step_eff.goto:
+            eff.goto = step_eff.goto
+            out.append(new_text)
+            return out, eff
         if step_eff.end_rule:
             eff.end_rule = True
             out.append(new_text)
@@ -192,10 +230,20 @@ def _run_inner_pipeline(
     *,
     on_translate_llm: TranslateLlmSync,
 ) -> InnerPipelineResult:
+    labels = _build_step_label_index(sub)
     split_parts: list[str] | None = None
     end_rule = False
-    for st in sub:
+    i = 0
+    n = len(sub)
+    guard_iters = 0
+    max_iters = n + _INNER_PIPELINE_MAX_EXTRA_ITERS
+    while i < n:
+        guard_iters += 1
+        if guard_iters > max_iters:
+            break
+        st = sub[i]
         if not isinstance(st, dict):
+            i += 1
             continue
         if split_parts is not None:
             split_parts, step_eff = _run_parts_through_step(
@@ -207,10 +255,14 @@ def _run_inner_pipeline(
             )
             if step_eff.end_rule:
                 end_rule = True
+            if step_eff.goto:
+                i = _resolve_goto_index(labels, step_eff.goto, fallback=i + 1)
+                continue
             if not split_parts:
                 return InnerPipelineResult(payload=None)
             if end_rule:
                 return InnerPipelineResult(payload=split_parts, end_rule=True)
+            i += 1
             continue
         res = _apply_one_module_step(region_text, st, pctx, hit, on_translate_llm=on_translate_llm)
         region_text, new_split, step_eff = _consume_module_result(region_text, res)
@@ -221,8 +273,12 @@ def _run_inner_pipeline(
             if new_split:
                 split_parts = new_split
             break
+        if step_eff.goto:
+            i = _resolve_goto_index(labels, step_eff.goto, fallback=i + 1)
+            continue
         if new_split:
             split_parts = new_split
+        i += 1
     if split_parts is not None:
         payload: str | list[str] | None = split_parts if split_parts else None
         return InnerPipelineResult(payload=payload, end_rule=end_rule)
@@ -237,10 +293,20 @@ async def _run_inner_pipeline_async(
     *,
     on_translate_llm: TranslateLlmAsync,
 ) -> InnerPipelineResult:
+    labels = _build_step_label_index(sub)
     split_parts: list[str] | None = None
     end_rule = False
-    for st in sub:
+    i = 0
+    n = len(sub)
+    guard_iters = 0
+    max_iters = n + _INNER_PIPELINE_MAX_EXTRA_ITERS
+    while i < n:
+        guard_iters += 1
+        if guard_iters > max_iters:
+            break
+        st = sub[i]
         if not isinstance(st, dict):
+            i += 1
             continue
         if split_parts is not None:
             split_parts, step_eff = await _run_parts_through_step_async(
@@ -252,10 +318,14 @@ async def _run_inner_pipeline_async(
             )
             if step_eff.end_rule:
                 end_rule = True
+            if step_eff.goto:
+                i = _resolve_goto_index(labels, step_eff.goto, fallback=i + 1)
+                continue
             if not split_parts:
                 return InnerPipelineResult(payload=None)
             if end_rule:
                 return InnerPipelineResult(payload=split_parts, end_rule=True)
+            i += 1
             continue
         res = await _apply_one_module_step_async(region_text, st, pctx, hit, on_translate_llm=on_translate_llm)
         region_text, new_split, step_eff = _consume_module_result(region_text, res)
@@ -266,8 +336,12 @@ async def _run_inner_pipeline_async(
             if new_split:
                 split_parts = new_split
             break
+        if step_eff.goto:
+            i = _resolve_goto_index(labels, step_eff.goto, fallback=i + 1)
+            continue
         if new_split:
             split_parts = new_split
+        i += 1
     if split_parts is not None:
         payload: str | list[str] | None = split_parts if split_parts else None
         return InnerPipelineResult(payload=payload, end_rule=end_rule)

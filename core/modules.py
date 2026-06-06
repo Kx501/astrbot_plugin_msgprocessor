@@ -16,7 +16,7 @@ ModuleFn = Callable[[str, dict[str, Any], ProcessingContext, MatchHit | None], M
 
 _BACKSLASH_PLACEHOLDER = "\x00"
 
-_GUARD_OUTCOMES = frozenset({"pass", "block", "stop_rule"})
+_GUARD_OUTCOMES = frozenset({"pass", "block", "stop_rule", "goto"})
 
 
 def _unescape_config_literal(s: str) -> str:
@@ -46,22 +46,27 @@ def _parse_guard_outcome(raw: Any, *, default: str = "pass") -> str:
     return s if s in _GUARD_OUTCOMES else default
 
 
-def _guard_result(text: str, outcome: str) -> ModuleResult:
+def _guard_result(text: str, outcome: str, cfg: dict[str, Any], when_key: str) -> ModuleResult:
     if outcome == "block":
         return ModuleResult(text="", drop=True)
     if outcome == "stop_rule":
         return ModuleResult(text, end_rule=True)
+    if outcome == "goto":
+        target = str(cfg.get(f"{when_key}_goto") or "").strip()
+        if target:
+            return ModuleResult(text, goto=target)
+        return ModuleResult(text)
     return ModuleResult(text)
 
 
 def mod_guard(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """条件守卫：对命中段做一条运算型判断，按成立/不成立配置 pass / block / stop_rule。"""
+    """条件守卫：对命中段做一条运算型判断，按成立/不成立配置 pass / block / stop_rule / goto。"""
     _ = hit
     full = ctx.message if isinstance(ctx.message, str) else text
     matched = eval_condition(text, full, cfg)
-    key = "when_true" if matched else "when_false"
-    outcome = _parse_guard_outcome(cfg.get(key), default="pass")
-    return _guard_result(text, outcome)
+    when_key = "when_true" if matched else "when_false"
+    outcome = _parse_guard_outcome(cfg.get(when_key), default="pass")
+    return _guard_result(text, outcome, cfg, when_key)
 
 
 def mod_noop(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:

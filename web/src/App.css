@@ -1080,6 +1080,39 @@ textarea {
   min-width: 0;
 }
 
+.pipeline-step-label {
+  flex: 0 1 9rem;
+  min-width: 6.5rem;
+}
+
+.pipeline-step-label--auto {
+  gap: 0.35rem;
+}
+
+.pipeline-step-label-value {
+  display: flex;
+  align-items: center;
+  min-height: 2.35rem;
+  padding: 0 0.65rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+  color: var(--text);
+  background: var(--subtle-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 640px) {
+  .pipeline-row-top {
+    flex-wrap: wrap;
+  }
+
+  .pipeline-step-label {
+    flex: 1 1 100%;
+  }
+}
+
 .pipeline-row-bottom {
   padding-left: calc(2.35rem + 0.65rem);
   min-width: 0;

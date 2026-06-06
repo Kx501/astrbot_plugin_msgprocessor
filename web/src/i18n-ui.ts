@@ -89,6 +89,10 @@ export const UI = {
   guardOutcomePass: "不做处理（继续后续模块）",
   guardOutcomeBlock: "拦截发送",
   guardOutcomeStopRule: "终止本条规则后续步骤",
+  guardOutcomeGoto: "跳转到指定步骤",
+  guardGotoTarget: "跳转目标",
+  guardGotoUnset: "（请选择步骤标识）",
+  guardGotoHint: "跳转仅在本匹配块的内层步骤间生效；步骤标识按顺序自动生成为 s1、s2…",
   guardCondKindType: "类型",
   guardCondCmp: "比较方式",
   guardCondKindDate: "日期",
@@ -111,7 +115,10 @@ export const UI = {
   guardCondIfNoDate: "未找到日期时视为成立",
   guardCondIfMissing: "未找到数值时视为成立",
   guardHint:
-    "每条 guard 一种运算（日期/数值/长度比大小）。文本筛选请用 matcher；组合逻辑请串联多个 guard。",
+    "每条 guard 一种运算（日期/数值/长度比大小）。文本筛选请用 matcher；组合逻辑请串联多个 guard 或使用 goto 分支。",
+
+  stepLabelField: "步骤标识",
+  stepLabelAuto: (label: string) => label,
 
   cfgFrom: "查找",
   cfgTo: "替换为",
