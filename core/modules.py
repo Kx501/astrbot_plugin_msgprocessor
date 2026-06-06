@@ -86,6 +86,35 @@ def mod_prepend(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: Mat
     return ModuleResult(prefix + text)
 
 
+def _split_by_marker(text: str, marker: str, *, delete_marker: bool) -> list[str]:
+    if marker == "" or marker not in text:
+        return [text]
+    if delete_marker:
+        parts = text.split(marker)
+    else:
+        raw = text.split(marker)
+        parts = [raw[0]]
+        for chunk in raw[1:]:
+            parts.append(marker + chunk)
+    cleaned = [p.strip() for p in parts]
+    cleaned = [p for p in cleaned if p]
+    return cleaned if cleaned else [text]
+
+
+def mod_split(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
+    """按标记将命中段拆为多条文本；拆分结果向上游传递为多条待发消息。"""
+    _ = ctx, hit
+    marker_raw = cfg.get("marker")
+    if not isinstance(marker_raw, str) or marker_raw == "":
+        return ModuleResult(text)
+    marker = _unescape_config_literal(marker_raw)
+    delete_marker = bool(cfg.get("delete_marker", True))
+    parts = _split_by_marker(text, marker, delete_marker=delete_marker)
+    if len(parts) <= 1:
+        return ModuleResult(parts[0] if parts else text)
+    return ModuleResult(text=parts[0], split_parts=parts)
+
+
 def mod_delete(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
     """删除命中段内所有与 ``from`` 相同的字面量（整段替换为空）。"""
     out = text
@@ -111,6 +140,7 @@ BUILTIN_MODULES: dict[str, ModuleFn] = {
     "delete": mod_delete,
     "prepend": mod_prepend,
     "append": mod_append,
+    "split_by_marker": mod_split,
 }
 
 

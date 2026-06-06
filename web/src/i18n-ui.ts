@@ -70,6 +70,7 @@ export const UI = {
   moduleTranslateLlm: "AI翻译",
   modulePrepend: "前方拼接",
   moduleAppend: "后方拼接",
+  moduleSplit: "标记分割",
 
   cfgFrom: "查找",
   cfgTo: "替换为",
@@ -83,6 +84,10 @@ export const UI = {
   cfgTranslateFallbackPrefix: "模型不可用或失败时的回退标记",
   cfgTranslateLlmHint:
     "译向与提示词在插件配置中设置；测试时仅展示回退标记。",
+  cfgSplitMarker: "拆分标记",
+  cfgDeleteMarker: "删除标记",
+  cfgSplitHint:
+    "将命中段按标记拆为多条消息；典型场景为 LLM 长回复分段发送。支持转义：\\n 换行、\\t 制表符、\\\\ 反斜杠。",
   cfgNone: "此模块无额外参数",
 
   moduleLabel: "模块类型",
@@ -117,6 +122,7 @@ export const MODULE_OPTIONS: { value: string; label: string }[] = [
   { value: "translate_llm", label: UI.moduleTranslateLlm },
   { value: "prepend", label: UI.modulePrepend },
   { value: "append", label: UI.moduleAppend },
+  { value: "split", label: UI.moduleSplit },
 ];
 
 export const STEP_OPTIONS: { value: string; label: string }[] = [

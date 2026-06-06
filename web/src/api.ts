@@ -23,6 +23,13 @@ export async function saveRules(name: string, doc: RulesDocumentUI): Promise<{ s
   return r.json() as Promise<{ saved: string }>;
 }
 
+function formatProcessOutput(output: string | string[]): string {
+  if (!Array.isArray(output)) {
+    return output;
+  }
+  return output.map((part, index) => `【消息 ${index + 1}】\n${part}`).join("\n\n");
+}
+
 export async function processMessage(message: string, doc: RulesDocumentUI): Promise<string> {
   const rules = uiToWire(doc);
   const r = await fetch("/api/process", {
@@ -31,6 +38,6 @@ export async function processMessage(message: string, doc: RulesDocumentUI): Pro
     body: JSON.stringify({ message, rules }),
   });
   if (!r.ok) throw new Error(`测试请求失败：${await errBody(r)}`);
-  const j = (await r.json()) as { output: string };
-  return j.output;
+  const j = (await r.json()) as { output: string | string[] };
+  return formatProcessOutput(j.output);
 }

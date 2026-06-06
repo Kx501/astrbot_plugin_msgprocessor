@@ -34,6 +34,8 @@ export function defaultConfig(mid: string): Record<string, unknown> {
       return { prefix: "" };
     case "delete":
       return { from: "", whole_from_empty: false };
+    case "split":
+      return { marker: "[SPLIT]", delete_marker: true };
     default:
       return {};
   }
@@ -193,6 +195,24 @@ function ModuleConfigFields({
             />
             <span>{UI.cfgWholeFromEmpty}</span>
           </label>
+        </div>
+      );
+    case "split":
+      return (
+        <div className="field-stack field-stack--block">
+          <label className="field-stack field-stack--block">
+            <span className="label-text">{UI.cfgSplitMarker}</span>
+            <input value={String(c.marker ?? "")} onChange={(e) => set({ marker: e.target.value })} />
+          </label>
+          <label className="field-inline-check field-inline-check--solo">
+            <input
+              type="checkbox"
+              checked={Boolean(c.delete_marker ?? true)}
+              onChange={(e) => set({ delete_marker: e.target.checked })}
+            />
+            <span>{UI.cfgDeleteMarker}</span>
+          </label>
+          <p className="muted pipeline-config-hint">{UI.cfgSplitHint}</p>
         </div>
       );
     default:

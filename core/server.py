@@ -105,7 +105,9 @@ def create_app(
             raise HTTPException(400, f"invalid json: {e}") from e
         except Exception as e:
             raise HTTPException(400, str(e)) from e
-        return {"output": out}
+        if isinstance(out, list):
+            return {"output": out, "split": True}
+        return {"output": out, "split": False}
 
     if wd.is_dir() and (wd / "index.html").is_file():
         app.mount("/assets", StaticFiles(directory=wd / "assets"), name="assets")

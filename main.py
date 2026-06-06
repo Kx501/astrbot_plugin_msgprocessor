@@ -229,17 +229,30 @@ class MsgProcessorStar(Star):
         meta: dict[str, Any],
     ) -> int:
         changed = 0
-        for comp in chain:
+        i = 0
+        while i < len(chain):
+            comp = chain[i]
             text = getattr(comp, "text", None)
             if not isinstance(text, str) or text == "":
+                i += 1
                 continue
             out = await process_text_async(doc, text, meta=meta)
+            if isinstance(out, list):
+                try:
+                    new_comps = [type(comp)(part) for part in out]
+                    chain[i : i + 1] = new_comps
+                    changed += 1
+                    i += len(new_comps)
+                except Exception:
+                    i += 1
+                continue
             if out != text:
                 try:
                     setattr(comp, "text", out)
                     changed += 1
                 except Exception:
-                    continue
+                    pass
+            i += 1
         return changed
 
     def _translate_llm_handler(

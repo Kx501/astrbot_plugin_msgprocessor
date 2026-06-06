@@ -41,6 +41,24 @@
       ]
     },
     {
+      "id": "llm_split_by_marker",
+      "enabled": false,
+      "priority": 9,
+      "limits": { "max_matches": 1 },
+      "steps": [
+        {
+          "id": "match_block",
+          "config": {
+            "matcher": { "type": "passthrough" },
+            "region": { "kind": "match" },
+            "steps": [
+              { "id": "split", "config": { "marker": "---", "delete_marker": true } }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "id": "simple_prefix",
       "enabled": true,
       "priority": 5,

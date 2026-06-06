@@ -40,3 +40,5 @@ class ModuleResult:
     text: str
     # 为 True 时不采纳本步的 text，保持进入本步前的命中段并继续执行后续模块
     skip_rule: bool = False
+    # 非空时表示将命中段拆为多条消息；text 为拆分后首段（供未感知拆分的调用方回退）
+    split_parts: list[str] | None = None
