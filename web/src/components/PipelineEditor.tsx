@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { CSSProperties } from "react";
-import { GUARD_OP_OPTIONS, MODULE_OPTIONS, UI, moduleLabel } from "../i18n-ui";
+import { GUARD_CMP_BY_KIND, GUARD_KIND_OPTIONS, MODULE_OPTIONS, UI, moduleLabel } from "../i18n-ui";
 import type { PipelineStepUI } from "../types";
 import { newKey } from "../types";
 
@@ -27,6 +27,29 @@ const GUARD_OUTCOMES = [
   { value: "block", label: UI.guardOutcomeBlock },
   { value: "stop_rule", label: UI.guardOutcomeStopRule },
 ] as const;
+
+type GuardKind = "date" | "number" | "length";
+type GuardCmp = "older_than" | "gt" | "gte" | "lt" | "lte" | "eq" | "ne";
+
+function parseGuardOp(op: string): { kind: GuardKind; cmp: GuardCmp } {
+  if (op === "date_older_than") {
+    return { kind: "date", cmp: "older_than" };
+  }
+  if (op.startsWith("number_")) {
+    return { kind: "number", cmp: op.slice("number_".length) as GuardCmp };
+  }
+  if (op.startsWith("length_")) {
+    return { kind: "length", cmp: op.slice("length_".length) as GuardCmp };
+  }
+  return { kind: "date", cmp: "older_than" };
+}
+
+function buildGuardOp(kind: GuardKind, cmp: GuardCmp): string {
+  if (kind === "date") {
+    return "date_older_than";
+  }
+  return `${kind}_${cmp}`;
+}
 
 function guardDefaults(op: string): Record<string, unknown> {
   const base = {
@@ -279,9 +302,11 @@ function GuardConfigFields({
   set: (patch: Record<string, unknown>) => void;
 }) {
   const op = String(c.op ?? "date_older_than");
-  const isDate = op === "date_older_than";
-  const isNumber = op.startsWith("number_");
-  const isLength = op.startsWith("length_");
+  const { kind, cmp } = parseGuardOp(op);
+  const cmpOptions = GUARD_CMP_BY_KIND[kind] ?? GUARD_CMP_BY_KIND.date;
+  const isDate = kind === "date";
+  const isNumber = kind === "number";
+  const isLength = kind === "length";
 
   const inSelect = (
     <label className="field-stack">
@@ -295,22 +320,46 @@ function GuardConfigFields({
 
   return (
     <div className="field-stack field-stack--block">
-      <label className="field-stack">
-        <span className="label-text">{UI.guardCondOp}</span>
-        <select
-          value={op}
-          onChange={(e) => {
-            const nextOp = e.target.value;
-            set({ ...guardDefaults(nextOp), when_true: c.when_true ?? "pass", when_false: c.when_false ?? "pass" });
-          }}
-        >
-          {GUARD_OP_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="form-grid-regex">
+        <label className="field-stack">
+          <span className="label-text">{UI.guardCondKindType}</span>
+          <select
+            value={kind}
+            onChange={(e) => {
+              const nextKind = e.target.value as GuardKind;
+              const nextCmp = (GUARD_CMP_BY_KIND[nextKind] ?? GUARD_CMP_BY_KIND.date)[0].value as GuardCmp;
+              const nextOp = buildGuardOp(nextKind, nextCmp);
+              set({
+                ...guardDefaults(nextOp),
+                when_true: c.when_true ?? "pass",
+                when_false: c.when_false ?? "pass",
+              });
+            }}
+          >
+            {GUARD_KIND_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field-stack">
+          <span className="label-text">{UI.guardCondCmp}</span>
+          <select
+            value={cmp}
+            onChange={(e) => {
+              const nextCmp = e.target.value as GuardCmp;
+              set({ op: buildGuardOp(kind, nextCmp) });
+            }}
+          >
+            {cmpOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       {isDate && (
         <>
           <label className="field-stack">
@@ -391,32 +440,34 @@ function GuardConfigFields({
           {inSelect}
         </>
       )}
-      <label className="field-stack">
-        <span className="label-text">{UI.guardWhenTrue}</span>
-        <select
-          value={String(c.when_true ?? "pass")}
-          onChange={(e) => set({ when_true: e.target.value })}
-        >
-          {GUARD_OUTCOMES.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="field-stack">
-        <span className="label-text">{UI.guardWhenFalse}</span>
-        <select
-          value={String(c.when_false ?? "pass")}
-          onChange={(e) => set({ when_false: e.target.value })}
-        >
-          {GUARD_OUTCOMES.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="form-grid-regex">
+        <label className="field-stack">
+          <span className="label-text">{UI.guardWhenTrue}</span>
+          <select
+            value={String(c.when_true ?? "pass")}
+            onChange={(e) => set({ when_true: e.target.value })}
+          >
+            {GUARD_OUTCOMES.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field-stack">
+          <span className="label-text">{UI.guardWhenFalse}</span>
+          <select
+            value={String(c.when_false ?? "pass")}
+            onChange={(e) => set({ when_false: e.target.value })}
+          >
+            {GUARD_OUTCOMES.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <p className="muted pipeline-config-hint">{UI.guardHint}</p>
     </div>
   );

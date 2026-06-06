@@ -89,20 +89,18 @@ export const UI = {
   guardOutcomePass: "不做处理（继续后续模块）",
   guardOutcomeBlock: "拦截发送",
   guardOutcomeStopRule: "终止本条规则后续步骤",
-  guardCondOp: "判断类型",
-  guardCondDateOlder: "日期超过天数",
-  guardCondNumberGt: "数值大于",
-  guardCondNumberGte: "数值大于等于",
-  guardCondNumberLt: "数值小于",
-  guardCondNumberLte: "数值小于等于",
-  guardCondNumberEq: "数值等于",
-  guardCondNumberNe: "数值不等于",
-  guardCondLengthGt: "长度大于",
-  guardCondLengthGte: "长度大于等于",
-  guardCondLengthLt: "长度小于",
-  guardCondLengthLte: "长度小于等于",
-  guardCondLengthEq: "长度等于",
-  guardCondLengthNe: "长度不等于",
+  guardCondKindType: "类型",
+  guardCondCmp: "比较方式",
+  guardCondKindDate: "日期",
+  guardCondKindNumber: "数值",
+  guardCondKindLength: "长度",
+  guardCondCmpOlderThan: "超过天数",
+  guardCondCmpGt: "大于",
+  guardCondCmpGte: "大于等于",
+  guardCondCmpLt: "小于",
+  guardCondCmpLte: "小于等于",
+  guardCondCmpEq: "等于",
+  guardCondCmpNe: "不等于",
   guardCondDays: "最大允许天数",
   guardCondFormat: "日期格式",
   guardCondDateRegex: "日期正则（可选，留空则用内置格式）",
@@ -161,21 +159,26 @@ export const UI = {
   scrollToTop: "回到顶部",
 } as const;
 
-export const GUARD_OP_OPTIONS: { value: string; label: string }[] = [
-  { value: "date_older_than", label: UI.guardCondDateOlder },
-  { value: "number_gt", label: UI.guardCondNumberGt },
-  { value: "number_gte", label: UI.guardCondNumberGte },
-  { value: "number_lt", label: UI.guardCondNumberLt },
-  { value: "number_lte", label: UI.guardCondNumberLte },
-  { value: "number_eq", label: UI.guardCondNumberEq },
-  { value: "number_ne", label: UI.guardCondNumberNe },
-  { value: "length_gt", label: UI.guardCondLengthGt },
-  { value: "length_gte", label: UI.guardCondLengthGte },
-  { value: "length_lt", label: UI.guardCondLengthLt },
-  { value: "length_lte", label: UI.guardCondLengthLte },
-  { value: "length_eq", label: UI.guardCondLengthEq },
-  { value: "length_ne", label: UI.guardCondLengthNe },
+export const GUARD_KIND_OPTIONS: { value: string; label: string }[] = [
+  { value: "date", label: UI.guardCondKindDate },
+  { value: "number", label: UI.guardCondKindNumber },
+  { value: "length", label: UI.guardCondKindLength },
 ];
+
+const GUARD_CMP_COMMON: { value: string; label: string }[] = [
+  { value: "gt", label: UI.guardCondCmpGt },
+  { value: "gte", label: UI.guardCondCmpGte },
+  { value: "lt", label: UI.guardCondCmpLt },
+  { value: "lte", label: UI.guardCondCmpLte },
+  { value: "eq", label: UI.guardCondCmpEq },
+  { value: "ne", label: UI.guardCondCmpNe },
+];
+
+export const GUARD_CMP_BY_KIND: Record<string, { value: string; label: string }[]> = {
+  date: [{ value: "older_than", label: UI.guardCondCmpOlderThan }],
+  number: GUARD_CMP_COMMON,
+  length: GUARD_CMP_COMMON,
+};
 
 export const MODULE_OPTIONS: { value: string; label: string }[] = [
   { value: "noop", label: UI.moduleNoop },
