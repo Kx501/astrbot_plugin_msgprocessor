@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { CSSProperties } from "react";
-import { MODULE_OPTIONS, UI, moduleLabel } from "../i18n-ui";
+import { GUARD_OP_OPTIONS, MODULE_OPTIONS, UI, moduleLabel } from "../i18n-ui";
 import type { PipelineStepUI } from "../types";
 import { newKey } from "../types";
 
@@ -28,12 +28,24 @@ const GUARD_OUTCOMES = [
   { value: "stop_rule", label: UI.guardOutcomeStopRule },
 ] as const;
 
-const GUARD_COND_OPS = [
-  { value: "contains", label: UI.guardCondContains },
-  { value: "not_contains", label: UI.guardCondNotContains },
-  { value: "regex", label: UI.guardCondRegex },
-  { value: "date_older_than", label: UI.guardCondDateOlder },
-] as const;
+function guardDefaults(op: string): Record<string, unknown> {
+  const base = {
+    op,
+    in: "region",
+    when_true: "pass",
+    when_false: "pass",
+  };
+  if (op === "date_older_than") {
+    return { ...base, days: 7, format: "%Y-%m-%d", if_no_date: "false" };
+  }
+  if (op.startsWith("number_")) {
+    return { ...base, value: 0, regex: "", if_missing: "false" };
+  }
+  if (op.startsWith("length_")) {
+    return { ...base, value: 0 };
+  }
+  return base;
+}
 
 export function defaultConfig(mid: string): Record<string, unknown> {
   switch (mid) {
@@ -51,8 +63,7 @@ export function defaultConfig(mid: string): Record<string, unknown> {
       return { marker: "[SPLIT]", delete_marker: true, trim_part_start: true, trim_part_end: true };
     case "guard":
       return {
-        logic: "all",
-        conditions: [{ op: "date_older_than", days: 7, format: "%Y-%m-%d", in: "region" }],
+        ...guardDefaults("date_older_than"),
         when_true: "block",
         when_false: "pass",
       };
@@ -267,127 +278,119 @@ function GuardConfigFields({
   c: Record<string, unknown>;
   set: (patch: Record<string, unknown>) => void;
 }) {
-  const conditions = Array.isArray(c.conditions) ? (c.conditions as Record<string, unknown>[]) : [];
+  const op = String(c.op ?? "date_older_than");
+  const isDate = op === "date_older_than";
+  const isNumber = op.startsWith("number_");
+  const isLength = op.startsWith("length_");
 
-  const setConditions = (next: Record<string, unknown>[]) => set({ conditions: next });
-
-  const updateCond = (idx: number, patch: Record<string, unknown>) => {
-    const next = conditions.map((row, i) => (i === idx ? { ...row, ...patch } : row));
-    setConditions(next);
-  };
+  const inSelect = (
+    <label className="field-stack">
+      <span className="label-text">{UI.fieldRegionKind}</span>
+      <select value={String(c.in ?? "region")} onChange={(e) => set({ in: e.target.value })}>
+        <option value="region">{UI.guardCondInRegion}</option>
+        <option value="message">{UI.guardCondInMessage}</option>
+      </select>
+    </label>
+  );
 
   return (
     <div className="field-stack field-stack--block">
       <label className="field-stack">
-        <span className="label-text">{UI.guardLogic}</span>
-        <select value={String(c.logic ?? "all")} onChange={(e) => set({ logic: e.target.value })}>
-          <option value="all">{UI.guardLogicAll}</option>
-          <option value="any">{UI.guardLogicAny}</option>
+        <span className="label-text">{UI.guardCondOp}</span>
+        <select
+          value={op}
+          onChange={(e) => {
+            const nextOp = e.target.value;
+            set({ ...guardDefaults(nextOp), when_true: c.when_true ?? "pass", when_false: c.when_false ?? "pass" });
+          }}
+        >
+          {GUARD_OP_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
         </select>
       </label>
-      <div className="guard-conditions">
-        {conditions.map((cond, idx) => {
-          const op = String(cond.op ?? "contains");
-          return (
-            <div key={idx} className="guard-condition-card">
-              <label className="field-stack">
-                <span className="label-text">{UI.guardCondOp}</span>
-                <select
-                  value={op}
-                  onChange={(e) => updateCond(idx, { op: e.target.value })}
-                >
-                  {GUARD_COND_OPS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {(op === "contains" || op === "not_contains") && (
-                <label className="field-stack">
-                  <span className="label-text">{UI.guardCondValue}</span>
-                  <input
-                    value={String(cond.value ?? "")}
-                    onChange={(e) => updateCond(idx, { value: e.target.value })}
-                  />
-                </label>
-              )}
-              {op === "regex" && (
-                <label className="field-stack">
-                  <span className="label-text">{UI.guardCondPattern}</span>
-                  <input
-                    value={String(cond.pattern ?? "")}
-                    onChange={(e) => updateCond(idx, { pattern: e.target.value })}
-                  />
-                </label>
-              )}
-              {op === "date_older_than" && (
-                <>
-                  <label className="field-stack">
-                    <span className="label-text">{UI.guardCondDays}</span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={String(cond.days ?? 7)}
-                      onChange={(e) => updateCond(idx, { days: Number(e.target.value) })}
-                    />
-                  </label>
-                  <label className="field-stack">
-                    <span className="label-text">{UI.guardCondFormat}</span>
-                    <input
-                      value={String(cond.format ?? "%Y-%m-%d")}
-                      onChange={(e) => updateCond(idx, { format: e.target.value })}
-                    />
-                  </label>
-                  <label className="field-stack">
-                    <span className="label-text">{UI.guardCondDateRegex}</span>
-                    <input
-                      value={String(cond.regex ?? "")}
-                      onChange={(e) => updateCond(idx, { regex: e.target.value })}
-                    />
-                  </label>
-                  <label className="field-stack">
-                    <span className="label-text">{UI.fieldRegionKind}</span>
-                    <select
-                      value={String(cond.in ?? "region")}
-                      onChange={(e) => updateCond(idx, { in: e.target.value })}
-                    >
-                      <option value="region">{UI.guardCondInRegion}</option>
-                      <option value="message">{UI.guardCondInMessage}</option>
-                    </select>
-                  </label>
-                  <label className="field-inline-check">
-                    <input
-                      type="checkbox"
-                      checked={String(cond.if_no_date ?? "false") === "true"}
-                      onChange={(e) =>
-                        updateCond(idx, { if_no_date: e.target.checked ? "true" : "false" })
-                      }
-                    />
-                    <span>{UI.guardCondIfNoDate}</span>
-                  </label>
-                </>
-              )}
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => setConditions(conditions.filter((_, i) => i !== idx))}
-              >
-                {UI.guardRemoveCondition}
-              </button>
-            </div>
-          );
-        })}
-        <button
-          type="button"
-          className="btn"
-          onClick={() =>
-            setConditions([...conditions, { op: "contains", value: "" }])
-          }
-        >
-          {UI.guardAddCondition}
-        </button>
-      </div>
+      {isDate && (
+        <>
+          <label className="field-stack">
+            <span className="label-text">{UI.guardCondDays}</span>
+            <input
+              type="number"
+              min={0}
+              value={String(c.days ?? 7)}
+              onChange={(e) => set({ days: Number(e.target.value) })}
+            />
+          </label>
+          <label className="field-stack">
+            <span className="label-text">{UI.guardCondFormat}</span>
+            <input
+              value={String(c.format ?? "%Y-%m-%d")}
+              onChange={(e) => set({ format: e.target.value })}
+            />
+          </label>
+          <label className="field-stack">
+            <span className="label-text">{UI.guardCondDateRegex}</span>
+            <input
+              value={String(c.regex ?? "")}
+              onChange={(e) => set({ regex: e.target.value })}
+            />
+          </label>
+          {inSelect}
+          <label className="field-inline-check">
+            <input
+              type="checkbox"
+              checked={String(c.if_no_date ?? "false") === "true"}
+              onChange={(e) => set({ if_no_date: e.target.checked ? "true" : "false" })}
+            />
+            <span>{UI.guardCondIfNoDate}</span>
+          </label>
+        </>
+      )}
+      {isNumber && (
+        <>
+          <label className="field-stack">
+            <span className="label-text">{UI.guardCondThreshold}</span>
+            <input
+              type="number"
+              step="any"
+              value={String(c.value ?? 0)}
+              onChange={(e) => set({ value: Number(e.target.value) })}
+            />
+          </label>
+          <label className="field-stack">
+            <span className="label-text">{UI.guardCondNumberRegex}</span>
+            <input
+              placeholder="例如：CVSS[:：]\\s*([0-9.]+)"
+              value={String(c.regex ?? "")}
+              onChange={(e) => set({ regex: e.target.value })}
+            />
+          </label>
+          {inSelect}
+          <label className="field-inline-check">
+            <input
+              type="checkbox"
+              checked={String(c.if_missing ?? "false") === "true"}
+              onChange={(e) => set({ if_missing: e.target.checked ? "true" : "false" })}
+            />
+            <span>{UI.guardCondIfMissing}</span>
+          </label>
+        </>
+      )}
+      {isLength && (
+        <>
+          <label className="field-stack">
+            <span className="label-text">{UI.guardCondThreshold}</span>
+            <input
+              type="number"
+              min={0}
+              value={String(c.value ?? 0)}
+              onChange={(e) => set({ value: Number(e.target.value) })}
+            />
+          </label>
+          {inSelect}
+        </>
+      )}
       <label className="field-stack">
         <span className="label-text">{UI.guardWhenTrue}</span>
         <select

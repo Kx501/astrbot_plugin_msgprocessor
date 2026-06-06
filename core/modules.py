@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Any, Callable
 
-from .conditions import eval_conditions
+from .conditions import eval_condition
 from .models import MatchHit, ModuleResult, ProcessingContext
 
 ModuleFn = Callable[[str, dict[str, Any], ProcessingContext, MatchHit | None], ModuleResult]
@@ -55,13 +55,12 @@ def _guard_result(text: str, outcome: str) -> ModuleResult:
 
 
 def mod_guard(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """条件守卫：对命中段求值，按成立/不成立分别执行 pass / block / stop_rule。"""
+    """条件守卫：对命中段做一条运算型判断，按成立/不成立配置 pass / block / stop_rule。"""
     _ = hit
     full = ctx.message if isinstance(ctx.message, str) else text
-    matched = eval_conditions(text, full, cfg)
+    matched = eval_condition(text, full, cfg)
     key = "when_true" if matched else "when_false"
-    default = "pass" if key == "when_false" else "pass"
-    outcome = _parse_guard_outcome(cfg.get(key), default=default)
+    outcome = _parse_guard_outcome(cfg.get(key), default="pass")
     return _guard_result(text, outcome)
 
 

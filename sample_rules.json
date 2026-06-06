@@ -73,8 +73,9 @@
               {
                 "id": "guard",
                 "config": {
-                  "logic": "all",
-                  "conditions": [{ "op": "date_older_than", "days": 7, "in": "region" }],
+                  "op": "date_older_than",
+                  "days": 7,
+                  "in": "region",
                   "when_true": "block",
                   "when_false": "pass"
                 }
@@ -102,10 +103,40 @@
               {
                 "id": "guard",
                 "config": {
-                  "logic": "all",
-                  "conditions": [
-                    { "op": "date_older_than", "days": 7, "format": "%Y-%m-%d", "in": "region" }
-                  ],
+                  "op": "date_older_than",
+                  "days": 7,
+                  "format": "%Y-%m-%d",
+                  "in": "region",
+                  "when_true": "block",
+                  "when_false": "pass"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "block_high_cvss",
+      "enabled": false,
+      "priority": 10,
+      "limits": { "max_matches": 1 },
+      "steps": [
+        {
+          "id": "match_block",
+          "config": {
+            "matcher": {
+              "type": "regex",
+              "pattern": "CVSS[:：]\\s*([0-9.]+)"
+            },
+            "region": { "kind": "group", "index": 1 },
+            "steps": [
+              {
+                "id": "guard",
+                "config": {
+                  "op": "number_gte",
+                  "value": 9,
+                  "in": "region",
                   "when_true": "block",
                   "when_false": "pass"
                 }
