@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .engine import process_text
+from .engine import process_message
 
 _PKG = Path(__file__).resolve().parent
 _REPO_ROOT = _PKG.parent
@@ -23,6 +23,7 @@ _DEFAULT_WEB_DIST = _REPO_ROOT / "web" / "dist"
 class ProcessBody(BaseModel):
     message: str = Field(..., min_length=0, max_length=2_000_000)
     rules: dict | None = None
+    rule_ids: list[str] | None = None
 
 
 class RulesDocument(BaseModel):
@@ -98,16 +99,14 @@ def create_app(
                 doc = body.rules
             else:
                 doc = _read_rules_json("rules.json")
-            out = process_text(doc, body.message, meta={})
+            result = process_message(doc, body.message, meta={}, rule_ids=body.rule_ids)
         except HTTPException:
             raise
         except json.JSONDecodeError as e:
             raise HTTPException(400, f"invalid json: {e}") from e
         except Exception as e:
             raise HTTPException(400, str(e)) from e
-        if isinstance(out, list):
-            return {"output": out, "split": True}
-        return {"output": out, "split": False}
+        return result.to_api_dict()
 
     if wd.is_dir() and (wd / "index.html").is_file():
         app.mount("/assets", StaticFiles(directory=wd / "assets"), name="assets")

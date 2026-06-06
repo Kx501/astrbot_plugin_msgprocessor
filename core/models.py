@@ -42,3 +42,51 @@ class ModuleResult:
     skip_rule: bool = False
     # 非空时表示将命中段拆为多条消息；text 为拆分后首段（供未感知拆分的调用方回退）
     split_parts: list[str] | None = None
+
+
+@dataclass(frozen=True)
+class ProcessSegment:
+    """处理结果中的一条待发消息段（当前仅纯文本）。"""
+
+    text: str
+    type: str = "plain"
+
+
+@dataclass(frozen=True)
+class ProcessEffect:
+    """结构性或可见的处理效果，供测试区展示。"""
+
+    kind: str
+    rule_id: str = ""
+    detail: str = ""
+
+
+@dataclass
+class ProcessResult:
+    input: str
+    segments: list[ProcessSegment]
+    effects: list[ProcessEffect] = field(default_factory=list)
+
+    @property
+    def unchanged(self) -> bool:
+        return len(self.segments) == 1 and self.segments[0].text == self.input
+
+    def to_legacy_output(self) -> str | list[str]:
+        texts = [s.text for s in self.segments]
+        if not texts:
+            return ""
+        if len(texts) == 1:
+            return texts[0]
+        return texts
+
+    def to_api_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "input": self.input,
+            "segments": [{"type": s.type, "text": s.text} for s in self.segments],
+            "effects": [
+                {"kind": e.kind, "rule_id": e.rule_id, "detail": e.detail} for e in self.effects
+            ],
+            "unchanged": self.unchanged,
+            "output": self.to_legacy_output(),
+        }

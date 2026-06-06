@@ -1,4 +1,4 @@
-import type { RulesDocumentUI, RulesDocumentWire } from "./types";
+import type { ProcessResponseWire, RulesDocumentUI, RulesDocumentWire, TestScope } from "./types";
 import { uiToWire } from "./types";
 
 async function errBody(r: Response): Promise<string> {
@@ -23,21 +23,22 @@ export async function saveRules(name: string, doc: RulesDocumentUI): Promise<{ s
   return r.json() as Promise<{ saved: string }>;
 }
 
-function formatProcessOutput(output: string | string[]): string {
-  if (!Array.isArray(output)) {
-    return output;
-  }
-  return output.map((part, index) => `【消息 ${index + 1}】\n${part}`).join("\n\n");
-}
-
-export async function processMessage(message: string, doc: RulesDocumentUI): Promise<string> {
+export async function processMessage(
+  message: string,
+  doc: RulesDocumentUI,
+  options?: { scope?: TestScope; selectedRuleId?: string },
+): Promise<ProcessResponseWire> {
   const rules = uiToWire(doc);
+  const scope = options?.scope ?? "all";
+  const ruleIds =
+    scope === "selected" && options?.selectedRuleId?.trim()
+      ? [options.selectedRuleId.trim()]
+      : undefined;
   const r = await fetch("/api/process", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, rules }),
+    body: JSON.stringify({ message, rules, rule_ids: ruleIds }),
   });
   if (!r.ok) throw new Error(`测试请求失败：${await errBody(r)}`);
-  const j = (await r.json()) as { output: string | string[] };
-  return formatProcessOutput(j.output);
+  return r.json() as Promise<ProcessResponseWire>;
 }

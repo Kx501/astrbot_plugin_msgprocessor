@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchRules, processMessage, saveRules } from "./api";
+import { fetchRules, saveRules } from "./api";
 import { StepsEditor, defaultStepConfig } from "./components/StepsEditor";
+import { TestBench } from "./components/TestBench";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { UI } from "./i18n-ui";
 import type { RuleUI, RulesDocumentUI } from "./types";
@@ -35,10 +36,6 @@ export default function App() {
   const [doc, setDoc] = useState<RulesDocumentUI | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState(0);
-  const [testInput, setTestInput] = useState("【示例】你好 world 其它内容 /echo test");
-  const [testOutput, setTestOutput] = useState("");
-  const [testError, setTestError] = useState<string | null>(null);
-  const [testBusy, setTestBusy] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -76,21 +73,6 @@ export default function App() {
     },
     [doc, rule, selected],
   );
-
-  const runTest = async () => {
-    if (!doc) return;
-    setTestBusy(true);
-    setTestError(null);
-    try {
-      const out = await processMessage(testInput, doc);
-      setTestOutput(out);
-    } catch (e) {
-      setTestError(e instanceof Error ? e.message : String(e));
-      setTestOutput("");
-    } finally {
-      setTestBusy(false);
-    }
-  };
 
   const saveEditor = async () => {
     if (!doc) return;
@@ -146,34 +128,7 @@ export default function App() {
         </div>
       </header>
 
-      <section className="card test-bench section-card" aria-labelledby="test-title">
-        <div className="section-head">
-          <h2 id="test-title">{UI.testSection}</h2>
-        </div>
-        <p className="muted section-desc">{UI.testHint}</p>
-        <div className="test-bench-grid">
-          <label className="field field--test">
-            <span className="field-label">{UI.input}</span>
-            <textarea
-              rows={4}
-              value={testInput}
-              onChange={(e) => setTestInput(e.target.value)}
-              spellCheck={false}
-              placeholder="在此粘贴或输入需要测试的机器人消息文本…"
-            />
-          </label>
-          <label className="field field--test">
-            <span className="field-label">{UI.output}</span>
-            <textarea rows={4} value={testOutput} readOnly className="output-area" spellCheck={false} />
-          </label>
-          <div className="test-actions">
-            <button type="button" className="btn btn-primary" disabled={testBusy} onClick={() => void runTest()}>
-              {testBusy ? UI.running : UI.run}
-            </button>
-            {testError ? <span className="error">{testError}</span> : null}
-          </div>
-        </div>
-      </section>
+      <TestBench doc={doc} selectedRuleId={rule?.id ?? ""} />
 
       <div className="layout">
         <aside className="sidebar card section-card">
@@ -208,9 +163,11 @@ export default function App() {
             <button type="button" className="btn btn-primary btn-block" onClick={() => void saveEditor()}>
               {UI.saveFile}
             </button>
-            {saveMsg ? (
-              <span className={`save-feedback ${saveOk ? "ok" : "error"}`}>{saveMsg}</span>
-            ) : null}
+            <div className="save-feedback-slot" aria-live="polite">
+              {saveMsg ? (
+                <span className={`save-feedback ${saveOk ? "ok" : "error"}`}>{saveMsg}</span>
+              ) : null}
+            </div>
           </div>
         </aside>
 

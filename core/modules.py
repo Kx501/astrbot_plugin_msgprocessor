@@ -140,6 +140,7 @@ BUILTIN_MODULES: dict[str, ModuleFn] = {
     "delete": mod_delete,
     "prepend": mod_prepend,
     "append": mod_append,
+    "split": mod_split,
     "split_by_marker": mod_split,
 }
 

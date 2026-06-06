@@ -4,23 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from .models import ProcessEffect, ProcessResult, ProcessSegment
 from .steps import RuleExecContext, normalize_rule_steps, run_rule_steps, run_rule_steps_async
 
-
 ProcessOutput = str | list[str]
-
-
-def process_text(rules_doc: dict[str, Any], message: str, *, meta: dict[str, Any] | None = None) -> ProcessOutput:
-    return process_with_rules(rules_doc, message, meta=meta or {})
-
-
-async def process_text_async(
-    rules_doc: dict[str, Any],
-    message: str,
-    *,
-    meta: dict[str, Any] | None = None,
-) -> ProcessOutput:
-    return await process_with_rules_async(rules_doc, message, meta=meta or {})
 
 
 def _sort_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -34,6 +21,18 @@ def _sort_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return (-p, rid)
 
     return sorted(rules, key=key)
+
+
+def _rules_from_doc(rules_doc: dict[str, Any], *, rule_ids: list[str] | None = None) -> list[dict[str, Any]]:
+    rules = rules_doc.get("rules")
+    if not isinstance(rules, list):
+        return []
+    items = [r for r in rules if isinstance(r, dict)]
+    if rule_ids:
+        id_set = {str(rid) for rid in rule_ids if str(rid).strip()}
+        items = [r for r in items if str(r.get("id", "")) in id_set]
+        return [{**r, "enabled": True} for r in items]
+    return items
 
 
 def _apply_rule(message: str, rule: dict[str, Any], meta: dict[str, Any]) -> ProcessOutput:
@@ -74,6 +73,29 @@ async def _apply_rule_async(message: str, rule: dict[str, Any], meta: dict[str, 
     return ctx.message
 
 
+def _record_rule_effect(
+    effects: list[ProcessEffect],
+    *,
+    rule_id: str,
+    before: str,
+    result: ProcessOutput,
+) -> None:
+    if isinstance(result, list):
+        if len(result) > 1:
+            effects.append(
+                ProcessEffect(
+                    kind="split",
+                    rule_id=rule_id,
+                    detail=f"拆为 {len(result)} 条消息",
+                )
+            )
+        elif len(result) == 1 and result[0] != before:
+            effects.append(ProcessEffect(kind="transform", rule_id=rule_id))
+        return
+    if result != before:
+        effects.append(ProcessEffect(kind="transform", rule_id=rule_id))
+
+
 def _fan_out_rule_results(pending: list[str], result: ProcessOutput) -> list[str]:
     if isinstance(result, list):
         pending.extend(result)
@@ -82,31 +104,78 @@ def _fan_out_rule_results(pending: list[str], result: ProcessOutput) -> list[str
     return pending
 
 
-def process_with_rules(rules_doc: dict[str, Any], message: str, *, meta: dict[str, Any]) -> ProcessOutput:
-    rules = rules_doc.get("rules")
-    if not isinstance(rules, list):
-        return message
+def _segments_from_pending(pending: list[str]) -> list[ProcessSegment]:
+    if not pending:
+        return []
+    return [ProcessSegment(text=text) for text in pending]
+
+
+def process_message(
+    rules_doc: dict[str, Any],
+    message: str,
+    *,
+    meta: dict[str, Any] | None = None,
+    rule_ids: list[str] | None = None,
+) -> ProcessResult:
+    meta = meta or {}
+    effects: list[ProcessEffect] = []
     pending = [message]
-    for rule in _sort_rules([r for r in rules if isinstance(r, dict)]):
+    for rule in _sort_rules(_rules_from_doc(rules_doc, rule_ids=rule_ids)):
+        rid = str(rule.get("id", ""))
         next_pending: list[str] = []
         for msg in pending:
-            _fan_out_rule_results(next_pending, _apply_rule(msg, rule, meta))
+            result = _apply_rule(msg, rule, meta)
+            _record_rule_effect(effects, rule_id=rid, before=msg, result=result)
+            _fan_out_rule_results(next_pending, result)
         pending = next_pending
-    if len(pending) == 1:
-        return pending[0]
-    return pending
+    return ProcessResult(input=message, segments=_segments_from_pending(pending), effects=effects)
+
+
+async def process_message_async(
+    rules_doc: dict[str, Any],
+    message: str,
+    *,
+    meta: dict[str, Any] | None = None,
+    rule_ids: list[str] | None = None,
+) -> ProcessResult:
+    meta = meta or {}
+    effects: list[ProcessEffect] = []
+    pending = [message]
+    for rule in _sort_rules(_rules_from_doc(rules_doc, rule_ids=rule_ids)):
+        rid = str(rule.get("id", ""))
+        next_pending: list[str] = []
+        for msg in pending:
+            result = await _apply_rule_async(msg, rule, meta)
+            _record_rule_effect(effects, rule_id=rid, before=msg, result=result)
+            _fan_out_rule_results(next_pending, result)
+        pending = next_pending
+    return ProcessResult(input=message, segments=_segments_from_pending(pending), effects=effects)
+
+
+def process_text(
+    rules_doc: dict[str, Any],
+    message: str,
+    *,
+    meta: dict[str, Any] | None = None,
+    rule_ids: list[str] | None = None,
+) -> ProcessOutput:
+    return process_message(rules_doc, message, meta=meta, rule_ids=rule_ids).to_legacy_output()
+
+
+async def process_text_async(
+    rules_doc: dict[str, Any],
+    message: str,
+    *,
+    meta: dict[str, Any] | None = None,
+    rule_ids: list[str] | None = None,
+) -> ProcessOutput:
+    result = await process_message_async(rules_doc, message, meta=meta, rule_ids=rule_ids)
+    return result.to_legacy_output()
+
+
+def process_with_rules(rules_doc: dict[str, Any], message: str, *, meta: dict[str, Any]) -> ProcessOutput:
+    return process_text(rules_doc, message, meta=meta)
 
 
 async def process_with_rules_async(rules_doc: dict[str, Any], message: str, *, meta: dict[str, Any]) -> ProcessOutput:
-    rules = rules_doc.get("rules")
-    if not isinstance(rules, list):
-        return message
-    pending = [message]
-    for rule in _sort_rules([r for r in rules if isinstance(r, dict)]):
-        next_pending: list[str] = []
-        for msg in pending:
-            _fan_out_rule_results(next_pending, await _apply_rule_async(msg, rule, meta))
-        pending = next_pending
-    if len(pending) == 1:
-        return pending[0]
-    return pending
+    return await process_text_async(rules_doc, message, meta=meta)

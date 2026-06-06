@@ -49,6 +49,28 @@ export interface RulesDocumentUI {
   rules: RuleUI[];
 }
 
+export interface ProcessSegmentWire {
+  type: "plain";
+  text: string;
+}
+
+export interface ProcessEffectWire {
+  kind: string;
+  rule_id?: string;
+  detail?: string;
+}
+
+export interface ProcessResponseWire {
+  schema_version: number;
+  input: string;
+  segments: ProcessSegmentWire[];
+  effects: ProcessEffectWire[];
+  unchanged: boolean;
+  output: string | string[];
+}
+
+export type TestScope = "all" | "selected";
+
 export function newKey(): string {
   return globalThis.crypto?.randomUUID?.() ?? `k_${Math.random().toString(36).slice(2)}`;
 }

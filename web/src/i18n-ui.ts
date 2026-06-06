@@ -13,12 +13,26 @@ export const UI = {
   editRule: "编辑规则",
 
   testSection: "测试区",
+  testExpand: "展开测试区",
+  testCollapse: "收起测试区",
   testHint:
-    "使用所有已启用的规则进行测试，无需先保存。若只想验证某一条，可暂时取消勾选其他规则的「启用此规则」。",
+    "测试使用当前页面上的规则配置（含未保存的修改），无需先保存。选择「全部已启用规则」时仅 enabled 为真的规则参与；选择「仅当前规则」时只跑侧边栏选中的那条（无视启用开关）。",
+  testScopeLabel: "测试范围",
+  testScopeAll: "全部已启用规则",
+  testScopeSelected: "仅当前规则",
+  testInputPlaceholder: "在此粘贴或输入需要测试的机器人消息文本…",
+  testOutputPlaceholder: "执行处理后，结果将按待发消息逐条展示",
+  testOutputUnchanged: "文本未发生变化",
+  testOutputDropped: "本条消息已被过滤，不会发送",
+  testMessageIndex: (n: number) => `消息 ${n}`,
+  testMessageEmpty: "（空）",
   input: "原始文本",
-  output: "处理后",
+  output: "处理结果",
   run: "执行处理",
   running: "处理中…",
+  effectSplit: "拆分为多条",
+  effectTransform: "已改写",
+  effectDrop: "已过滤",
 
   rulesSidebar: "规则列表",
   newRule: "新建规则",
@@ -136,4 +150,19 @@ export function moduleLabel(id: string): string {
 
 export function stepLabel(id: string): string {
   return STEP_OPTIONS.find((o) => o.value === id)?.label ?? id;
+}
+
+export function effectLabel(effect: { kind: string; rule_id?: string; detail?: string }): string {
+  const rid = effect.rule_id?.trim();
+  const prefix = rid ? `${rid}: ` : "";
+  switch (effect.kind) {
+    case "split":
+      return `${prefix}${effect.detail || UI.effectSplit}`;
+    case "drop":
+      return `${prefix}${UI.effectDrop}`;
+    case "transform":
+      return `${prefix}${UI.effectTransform}`;
+    default:
+      return `${prefix}${effect.kind}`;
+  }
 }
