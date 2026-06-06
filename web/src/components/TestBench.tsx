@@ -1,17 +1,7 @@
 import { useState } from "react";
 import { processMessage } from "../api";
-import { effectLabel, UI } from "../i18n-ui";
-import type { ProcessEffectWire, ProcessResponseWire, RulesDocumentUI, TestScope } from "../types";
-
-function EffectBadge({ effect }: { effect: ProcessEffectWire }) {
-  const variant = effect.kind === "split" ? "split" : effect.kind === "drop" ? "drop" : "transform";
-  const label = effectLabel(effect);
-  return (
-    <span className={`effect-badge effect-badge--${variant}`} title={effect.detail || undefined}>
-      {label}
-    </span>
-  );
-}
+import { UI } from "../i18n-ui";
+import type { ProcessResponseWire, RulesDocumentUI, TestScope } from "../types";
 
 function MessageCard({ index, text }: { index: number; text: string }) {
   return (
@@ -30,35 +20,18 @@ function ProcessOutputPanel({ result }: { result: ProcessResponseWire | null }) 
   }
 
   if (result.segments.length === 0) {
-    return (
-      <div className="test-output-panel">
-        <p className="test-output-drop">{UI.testOutputDropped}</p>
-        {result.effects.length > 0 ? (
-          <div className="test-effects">
-            {result.effects.map((effect, i) => (
-              <EffectBadge key={`${effect.kind}-${effect.rule_id}-${i}`} effect={effect} />
-            ))}
-          </div>
-        ) : null}
-      </div>
-    );
+    return <p className="test-output-drop">{UI.testOutputDropped}</p>;
+  }
+
+  if (result.unchanged) {
+    return <p className="muted test-output-unchanged">{UI.testOutputUnchanged}</p>;
   }
 
   return (
-    <div className="test-output-panel">
-      {result.effects.length > 0 ? (
-        <div className="test-effects">
-          {result.effects.map((effect, i) => (
-            <EffectBadge key={`${effect.kind}-${effect.rule_id}-${i}`} effect={effect} />
-          ))}
-        </div>
-      ) : null}
-      {result.unchanged ? <p className="muted test-output-unchanged">{UI.testOutputUnchanged}</p> : null}
-      <div className="message-card-list">
-        {result.segments.map((seg, i) => (
-          <MessageCard key={i} index={i + 1} text={seg.text} />
-        ))}
-      </div>
+    <div className="message-card-list">
+      {result.segments.map((seg, i) => (
+        <MessageCard key={i} index={i + 1} text={seg.text} />
+      ))}
     </div>
   );
 }
@@ -140,7 +113,9 @@ export function TestBench({
             </label>
             <div className="field field--test test-output-field">
               <span className="field-label">{UI.output}</span>
-              <ProcessOutputPanel result={testResult} />
+              <div className="test-output-panel">
+                <ProcessOutputPanel result={testResult} />
+              </div>
             </div>
             <div className="test-actions">
               <button type="button" className="btn btn-primary" disabled={testBusy} onClick={() => void runTest()}>

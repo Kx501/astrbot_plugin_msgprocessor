@@ -440,56 +440,6 @@ code,
   color: var(--warn, #c27803);
 }
 
-.test-effects {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.effect-badge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1.2;
-  padding: 0.2rem 0.5rem;
-  border-radius: 999px;
-  border: 1px solid transparent;
-}
-
-.effect-badge--split {
-  color: #7c3aed;
-  background: rgba(124, 58, 237, 0.12);
-  border-color: rgba(124, 58, 237, 0.25);
-}
-
-.effect-badge--transform {
-  color: #0369a1;
-  background: rgba(3, 105, 161, 0.1);
-  border-color: rgba(3, 105, 161, 0.22);
-}
-
-.effect-badge--drop {
-  color: #b45309;
-  background: rgba(180, 83, 9, 0.1);
-  border-color: rgba(180, 83, 9, 0.22);
-}
-
-[data-theme="dark"] .effect-badge--split {
-  color: #c4b5fd;
-  background: rgba(124, 58, 237, 0.2);
-}
-
-[data-theme="dark"] .effect-badge--transform {
-  color: #7dd3fc;
-  background: rgba(3, 105, 161, 0.22);
-}
-
-[data-theme="dark"] .effect-badge--drop {
-  color: #fcd34d;
-  background: rgba(180, 83, 9, 0.2);
-}
-
 .message-card-list {
   display: flex;
   flex-direction: column;
@@ -754,7 +704,7 @@ textarea {
 }
 
 .sidebar-actions {
-  padding-top: 0.8rem;
+  padding-top: 1.1rem;
   border-top: 1px solid var(--border);
   margin-top: 0;
   gap: 0.5rem;

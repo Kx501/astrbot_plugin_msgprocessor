@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .models import ProcessEffect, ProcessResult, ProcessSegment
+from .models import ProcessResult, ProcessSegment
 from .steps import RuleExecContext, normalize_rule_steps, run_rule_steps, run_rule_steps_async
 
 ProcessOutput = str | list[str]
@@ -73,29 +73,6 @@ async def _apply_rule_async(message: str, rule: dict[str, Any], meta: dict[str, 
     return ctx.message
 
 
-def _record_rule_effect(
-    effects: list[ProcessEffect],
-    *,
-    rule_id: str,
-    before: str,
-    result: ProcessOutput,
-) -> None:
-    if isinstance(result, list):
-        if len(result) > 1:
-            effects.append(
-                ProcessEffect(
-                    kind="split",
-                    rule_id=rule_id,
-                    detail=f"拆为 {len(result)} 条消息",
-                )
-            )
-        elif len(result) == 1 and result[0] != before:
-            effects.append(ProcessEffect(kind="transform", rule_id=rule_id))
-        return
-    if result != before:
-        effects.append(ProcessEffect(kind="transform", rule_id=rule_id))
-
-
 def _fan_out_rule_results(pending: list[str], result: ProcessOutput) -> list[str]:
     if isinstance(result, list):
         pending.extend(result)
@@ -118,17 +95,13 @@ def process_message(
     rule_ids: list[str] | None = None,
 ) -> ProcessResult:
     meta = meta or {}
-    effects: list[ProcessEffect] = []
     pending = [message]
     for rule in _sort_rules(_rules_from_doc(rules_doc, rule_ids=rule_ids)):
-        rid = str(rule.get("id", ""))
         next_pending: list[str] = []
         for msg in pending:
-            result = _apply_rule(msg, rule, meta)
-            _record_rule_effect(effects, rule_id=rid, before=msg, result=result)
-            _fan_out_rule_results(next_pending, result)
+            _fan_out_rule_results(next_pending, _apply_rule(msg, rule, meta))
         pending = next_pending
-    return ProcessResult(input=message, segments=_segments_from_pending(pending), effects=effects)
+    return ProcessResult(input=message, segments=_segments_from_pending(pending))
 
 
 async def process_message_async(
@@ -139,17 +112,13 @@ async def process_message_async(
     rule_ids: list[str] | None = None,
 ) -> ProcessResult:
     meta = meta or {}
-    effects: list[ProcessEffect] = []
     pending = [message]
     for rule in _sort_rules(_rules_from_doc(rules_doc, rule_ids=rule_ids)):
-        rid = str(rule.get("id", ""))
         next_pending: list[str] = []
         for msg in pending:
-            result = await _apply_rule_async(msg, rule, meta)
-            _record_rule_effect(effects, rule_id=rid, before=msg, result=result)
-            _fan_out_rule_results(next_pending, result)
+            _fan_out_rule_results(next_pending, await _apply_rule_async(msg, rule, meta))
         pending = next_pending
-    return ProcessResult(input=message, segments=_segments_from_pending(pending), effects=effects)
+    return ProcessResult(input=message, segments=_segments_from_pending(pending))
 
 
 def process_text(
