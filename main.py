@@ -12,7 +12,8 @@ from typing import Any
 
 import uvicorn
 from astrbot.api import logger as ab_logger
-from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.event import AstrMessageEvent, MessageChain, filter
+from astrbot.api.message_components import Plain
 from astrbot.api.star import Context, Star, StarTools, register
 
 from .core.engine import process_text_async
@@ -25,6 +26,7 @@ _PLUGIN_ROOT = Path(__file__).resolve().parent
 # Context.send_message 补丁：主动推送不走 on_decorating_result，需单独拦截。
 _send_patch_installed = False
 _msgprocessor_star_ref: Any = None
+_PENDING_SPLIT_BATCHES_KEY = "_msgprocessor_pending_batches"
 _SAMPLE_RULES = _PLUGIN_ROOT / "sample_rules.json"
 _WEB_DIST = _PLUGIN_ROOT / "web" / "dist"
 
@@ -95,6 +97,27 @@ def _build_translate_prompt(instruction: str, text: str) -> str:
     return f"{head}\n\n{text}"
 
 
+def _plain_text_nonempty(comp: Any) -> bool:
+    text = getattr(comp, "text", None)
+    return isinstance(text, str) and bool(text.strip())
+
+
+def _batch_has_content(batch: list[Any]) -> bool:
+    for comp in batch:
+        if _plain_text_nonempty(comp):
+            return True
+        if getattr(comp, "text", None) is None:
+            return True
+    return False
+
+
+def _clone_plain_comp(comp: Any, text: str) -> Any:
+    try:
+        return type(comp)(text)
+    except Exception:
+        return Plain(text)
+
+
 def _preview_text(s: Any, max_len: int = 120) -> str:
     text = "" if s is None else str(s)
     text = text.replace("\n", "\\n")
@@ -128,12 +151,16 @@ def _ensure_send_message_patch(star: Any) -> None:
                     proactive_umo=umo,
                 ),
             }
-            changed = await star_ref._apply_rules_to_plain_chain(chain, doc, meta)
-            if changed > 0:
-                ab_logger.debug(
-                    "MsgProcessor: send_message patch changed_plain_segments=%s",
-                    changed,
-                )
+            first_batch, rest_batches = await star_ref._process_chain_into_batches(
+                chain, doc, meta
+            )
+            chain[:] = first_batch
+            ok = await orig(self_ctx, session, message_chain)
+            for batch in rest_batches:
+                if not _batch_has_content(batch):
+                    continue
+                await orig(self_ctx, session, MessageChain(batch))
+            return ok
         except Exception:
             ab_logger.exception("MsgProcessor: send_message patch 异常")
         return await orig(self_ctx, session, message_chain)
@@ -222,38 +249,49 @@ class MsgProcessorStar(Star):
         ab_logger.info("MsgProcessor 已停止")
         _restore_send_message_patch()
 
-    async def _apply_rules_to_plain_chain(
+    async def _process_chain_into_batches(
         self,
         chain: list[Any],
         doc: dict[str, Any],
         meta: dict[str, Any],
-    ) -> int:
-        changed = 0
-        i = 0
-        while i < len(chain):
-            comp = chain[i]
+    ) -> tuple[list[Any], list[list[Any]]]:
+        """处理消息链；若规则产生拆分，则返回首条待发链与其余分条。"""
+        batches: list[list[Any]] = [[]]
+
+        for comp in chain:
             text = getattr(comp, "text", None)
             if not isinstance(text, str) or text == "":
-                i += 1
+                batches[-1].append(comp)
                 continue
+
             out = await process_text_async(doc, text, meta=meta)
             if isinstance(out, list):
-                try:
-                    new_comps = [type(comp)(part) for part in out]
-                    chain[i : i + 1] = new_comps
-                    changed += 1
-                    i += len(new_comps)
-                except Exception:
-                    i += 1
+                parts = out if out else [""]
+                for idx, part in enumerate(parts):
+                    new_comp = _clone_plain_comp(comp, part)
+                    if idx == 0:
+                        batches[-1].append(new_comp)
+                    else:
+                        batches.append([new_comp])
                 continue
+
             if out != text:
                 try:
                     setattr(comp, "text", out)
-                    changed += 1
                 except Exception:
-                    pass
-            i += 1
-        return changed
+                    comp = _clone_plain_comp(comp, out)
+            batches[-1].append(comp)
+
+        if not batches:
+            return chain, []
+        first = batches[0]
+        rest = batches[1:]
+        while first and not _batch_has_content(first) and rest:
+            first = rest.pop(0)
+        rest = [b for b in rest if _batch_has_content(b)]
+        if not _batch_has_content(first):
+            return chain, []
+        return first, rest
 
     def _translate_llm_handler(
         self,
@@ -315,9 +353,31 @@ class MsgProcessorStar(Star):
 
             doc = self._load_rules_doc()
             meta = {"translate_llm": self._translate_llm_handler(event)}
-            changed = await self._apply_rules_to_plain_chain(chain, doc, meta)
-
-            if changed > 0:
-                ab_logger.debug("MsgProcessor: on_decorating_result changed_plain_segments=%s", changed)
+            first_batch, rest_batches = await self._process_chain_into_batches(chain, doc, meta)
+            chain[:] = first_batch
+            if rest_batches:
+                event.set_extra(_PENDING_SPLIT_BATCHES_KEY, rest_batches)
+                ab_logger.debug(
+                    "MsgProcessor: split into %s messages (1 immediate + %s follow-up)",
+                    len(rest_batches) + 1,
+                    len(rest_batches),
+                )
         except Exception:
             ab_logger.exception("MsgProcessor: on_decorating_result 监听异常")
+
+    @filter.after_message_sent()
+    async def on_after_message_sent_splits(self, event: AstrMessageEvent) -> None:
+        """被动回复：首条由 RespondStage 发送，其余拆分段在此逐条发送。"""
+        pending = event.get_extra(_PENDING_SPLIT_BATCHES_KEY)
+        if not pending:
+            return
+        event.set_extra(_PENDING_SPLIT_BATCHES_KEY, None)
+        if not isinstance(pending, list):
+            return
+        for batch in pending:
+            if not isinstance(batch, list) or not _batch_has_content(batch):
+                continue
+            try:
+                await event.send(MessageChain(batch))
+            except Exception:
+                ab_logger.exception("MsgProcessor: 发送拆分消息失败")
