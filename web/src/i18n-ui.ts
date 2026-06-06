@@ -91,22 +91,25 @@ export const UI = {
   guardOutcomeStopRule: "终止本条规则后续步骤",
   guardOutcomeGoto: "跳转到指定步骤",
   guardGotoTarget: "跳转目标",
-  guardGotoUnset: "（请选择步骤标识）",
+  guardGotoUnset: "请选择步骤标识",
   guardGotoHint: "跳转仅在本匹配块的内层步骤间生效；步骤标识按顺序自动生成为 s1、s2…",
   guardCondKindType: "类型",
   guardCondCmp: "比较方式",
   guardCondKindDate: "日期",
   guardCondKindNumber: "数值",
-  guardCondKindLength: "长度",
-  guardCondCmpOlderThan: "超过天数",
+  guardCondCmpDateBeforeAt: "早于指定时间",
+  guardCondCmpDateAfterAt: "晚于指定时间",
+  guardCondCmpDateWithinDays: "时间范围内",
+  guardCondCmpDateOutsideDays: "时间范围外",
+  guardCondAnchorAt: "比较时间点",
   guardCondCmpGt: "大于",
   guardCondCmpGte: "大于等于",
   guardCondCmpLt: "小于",
   guardCondCmpLte: "小于等于",
   guardCondCmpEq: "等于",
   guardCondCmpNe: "不等于",
-  guardCondDays: "最大允许天数",
-  guardCondFormat: "日期格式",
+  guardCondDays: "天数",
+  guardCondFormat: "日期格式（消息内日期与比较时间点共用）",
   guardCondDateRegex: "日期正则（可选，留空则用内置格式）",
   guardCondNumberRegex: "数值正则（可选，第 1 捕获组为数值）",
   guardCondThreshold: "比较阈值",
@@ -115,7 +118,7 @@ export const UI = {
   guardCondIfNoDate: "未找到日期时视为成立",
   guardCondIfMissing: "未找到数值时视为成立",
   guardHint:
-    "每条 guard 一种运算（日期/数值/长度比大小）。文本筛选请用 matcher；组合逻辑请串联多个 guard 或使用 goto 分支。",
+    "每条 guard 一种运算（日期 / 数值比大小）。文本筛选请用 matcher；组合逻辑请串联多个 guard 或使用 goto 分支。",
 
   stepLabelField: "步骤标识",
   stepLabelAuto: (label: string) => label,
@@ -169,7 +172,6 @@ export const UI = {
 export const GUARD_KIND_OPTIONS: { value: string; label: string }[] = [
   { value: "date", label: UI.guardCondKindDate },
   { value: "number", label: UI.guardCondKindNumber },
-  { value: "length", label: UI.guardCondKindLength },
 ];
 
 const GUARD_CMP_COMMON: { value: string; label: string }[] = [
@@ -181,10 +183,15 @@ const GUARD_CMP_COMMON: { value: string; label: string }[] = [
   { value: "ne", label: UI.guardCondCmpNe },
 ];
 
+export const GUARD_DATE_OP_OPTIONS: { value: string; label: string }[] = [
+  { value: "date_before_at", label: UI.guardCondCmpDateBeforeAt },
+  { value: "date_after_at", label: UI.guardCondCmpDateAfterAt },
+  { value: "date_within_days", label: UI.guardCondCmpDateWithinDays },
+  { value: "date_outside_days", label: UI.guardCondCmpDateOutsideDays },
+];
+
 export const GUARD_CMP_BY_KIND: Record<string, { value: string; label: string }[]> = {
-  date: [{ value: "older_than", label: UI.guardCondCmpOlderThan }],
   number: GUARD_CMP_COMMON,
-  length: GUARD_CMP_COMMON,
 };
 
 export const MODULE_OPTIONS: { value: string; label: string }[] = [

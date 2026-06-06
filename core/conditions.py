@@ -14,6 +14,15 @@ _DEFAULT_DATE_PATTERNS: tuple[tuple[str, str], ...] = (
     ("%Y年%m月%d日", r"\d{4}年\d{1,2}月\d{1,2}日"),
 )
 
+_DATE_OPS = frozenset(
+    {
+        "date_before_at",
+        "date_after_at",
+        "date_within_days",
+        "date_outside_days",
+    }
+)
+
 _NUMBER_SCAN = re.compile(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?")
 
 _COMPARATORS: dict[str, Callable[[float, float], bool]] = {
@@ -59,6 +68,24 @@ def _parse_float(raw: Any, default: float) -> float:
         return default
 
 
+def _as_utc(dt: datetime) -> datetime:
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+
+def _parse_datetime_literal(raw: str, cfg: dict[str, Any]) -> datetime | None:
+    text = raw.strip()
+    if not text:
+        return None
+    fmt_raw = cfg.get("format") or cfg.get("date_format") or "%Y-%m-%d"
+    formats = [str(fmt_raw)] if str(fmt_raw).strip() else ["%Y-%m-%d"]
+    for fmt in formats:
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+    return None
+
+
 def _parse_date_from_text(text: str, cfg: dict[str, Any]) -> datetime | None:
     regex = cfg.get("regex") or cfg.get("date_regex")
     if isinstance(regex, str) and regex.strip():
@@ -69,14 +96,7 @@ def _parse_date_from_text(text: str, cfg: dict[str, Any]) -> datetime | None:
         if not m:
             return None
         raw = m.group(1) if m.lastindex else m.group(0)
-        fmt_raw = cfg.get("format") or cfg.get("date_format") or "%Y-%m-%d"
-        formats = [str(fmt_raw)] if str(fmt_raw).strip() else ["%Y-%m-%d"]
-        for fmt in formats:
-            try:
-                return datetime.strptime(raw.strip(), fmt)
-            except ValueError:
-                continue
-        return None
+        return _parse_datetime_literal(raw, cfg)
 
     for fmt, pat in _DEFAULT_DATE_PATTERNS:
         m = re.search(pat, text)
@@ -87,6 +107,13 @@ def _parse_date_from_text(text: str, cfg: dict[str, Any]) -> datetime | None:
         except ValueError:
             continue
     return None
+
+
+def _parse_anchor_datetime(cfg: dict[str, Any]) -> datetime | None:
+    raw = cfg.get("at") or cfg.get("anchor") or cfg.get("value")
+    if not isinstance(raw, str):
+        return None
+    return _parse_datetime_literal(raw, cfg)
 
 
 def _extract_number(text: str, cfg: dict[str, Any]) -> float | None:
@@ -113,14 +140,37 @@ def _extract_number(text: str, cfg: dict[str, Any]) -> float | None:
         return None
 
 
+def _eval_date_op(op: str, parsed: datetime, cfg: dict[str, Any]) -> bool:
+    dt = _as_utc(parsed)
+
+    if op == "date_before_at":
+        anchor = _parse_anchor_datetime(cfg)
+        if anchor is None:
+            return False
+        return dt < _as_utc(anchor)
+
+    if op == "date_after_at":
+        anchor = _parse_anchor_datetime(cfg)
+        if anchor is None:
+            return False
+        return dt >= _as_utc(anchor)
+
+    days = _parse_float(cfg.get("days"), 7.0)
+    now = datetime.now(timezone.utc)
+    age = now - dt
+    if op == "date_outside_days":
+        return age > timedelta(days=days)
+    if op == "date_within_days":
+        return age <= timedelta(days=days)
+    return False
+
+
 def _compare_op_parts(op: str) -> tuple[str, str] | None:
-    for prefix in ("number", "length"):
-        head = f"{prefix}_"
-        if not op.startswith(head):
-            continue
-        cmp_key = op[len(head) :]
-        if cmp_key in _COMPARATORS:
-            return prefix, cmp_key
+    if not op.startswith("number_"):
+        return None
+    cmp_key = op[len("number_") :]
+    if cmp_key in _COMPARATORS:
+        return "number", cmp_key
     return None
 
 
@@ -132,14 +182,11 @@ def eval_condition(region_text: str, full_message: str, cfg: dict[str, Any]) -> 
 
     source = _text_source(region_text, full_message, cfg)
 
-    if op == "date_older_than":
-        days = _parse_float(cfg.get("days"), 7.0)
+    if op in _DATE_OPS:
         parsed = _parse_date_from_text(source, cfg)
         if parsed is None:
             return _flag_true(cfg.get("if_no_date"))
-        now = datetime.now(timezone.utc)
-        dt = parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
-        return now - dt > timedelta(days=days)
+        return _eval_date_op(op, parsed, cfg)
 
     parts = _compare_op_parts(op)
     if parts is not None:
@@ -151,7 +198,5 @@ def eval_condition(region_text: str, full_message: str, cfg: dict[str, Any]) -> 
             if parsed is None:
                 return _flag_true(cfg.get("if_missing"))
             return fn(parsed, threshold)
-        if kind == "length":
-            return fn(float(len(source)), threshold)
 
     return False

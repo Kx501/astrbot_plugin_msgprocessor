@@ -16,7 +16,14 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { CSSProperties } from "react";
-import { GUARD_CMP_BY_KIND, GUARD_KIND_OPTIONS, MODULE_OPTIONS, UI, moduleLabel } from "../i18n-ui";
+import {
+  GUARD_CMP_BY_KIND,
+  GUARD_DATE_OP_OPTIONS,
+  GUARD_KIND_OPTIONS,
+  MODULE_OPTIONS,
+  UI,
+  moduleLabel,
+} from "../i18n-ui";
 import type { PipelineStepUI } from "../types";
 import { newKey, normalizePipelineLabels } from "../types";
 
@@ -46,27 +53,29 @@ function pipelineGotoLabels(pipeline: PipelineStepUI[], excludeKey: string): str
   return out;
 }
 
-type GuardKind = "date" | "number" | "length";
-type GuardCmp = "older_than" | "gt" | "gte" | "lt" | "lte" | "eq" | "ne";
+type GuardKind = "date" | "number";
+type GuardNumberCmp = "gt" | "gte" | "lt" | "lte" | "eq" | "ne";
+type GuardDateOp = "date_before_at" | "date_after_at" | "date_within_days" | "date_outside_days";
 
-function parseGuardOp(op: string): { kind: GuardKind; cmp: GuardCmp } {
-  if (op === "date_older_than") {
-    return { kind: "date", cmp: "older_than" };
-  }
-  if (op.startsWith("number_")) {
-    return { kind: "number", cmp: op.slice("number_".length) as GuardCmp };
-  }
-  if (op.startsWith("length_")) {
-    return { kind: "length", cmp: op.slice("length_".length) as GuardCmp };
-  }
-  return { kind: "date", cmp: "older_than" };
+const GUARD_DATE_OPS = new Set<string>(GUARD_DATE_OP_OPTIONS.map((o) => o.value));
+
+function isGuardDateOp(op: string): op is GuardDateOp {
+  return GUARD_DATE_OPS.has(op);
 }
 
-function buildGuardOp(kind: GuardKind, cmp: GuardCmp): string {
-  if (kind === "date") {
-    return "date_older_than";
+function parseGuardOp(op: string): { kind: GuardKind; numberCmp: GuardNumberCmp; dateOp: GuardDateOp } {
+  if (op.startsWith("number_")) {
+    return {
+      kind: "number",
+      numberCmp: op.slice("number_".length) as GuardNumberCmp,
+      dateOp: "date_outside_days",
+    };
   }
-  return `${kind}_${cmp}`;
+  return {
+    kind: "date",
+    numberCmp: "gt",
+    dateOp: isGuardDateOp(op) ? op : "date_outside_days",
+  };
 }
 
 function guardDefaults(op: string): Record<string, unknown> {
@@ -76,14 +85,14 @@ function guardDefaults(op: string): Record<string, unknown> {
     when_true: "pass",
     when_false: "pass",
   };
-  if (op === "date_older_than") {
-    return { ...base, days: 7, format: "%Y-%m-%d", if_no_date: "false" };
+  if (op === "date_before_at" || op === "date_after_at") {
+    return { ...base, op, at: "2020-01-01", format: "%Y-%m-%d", regex: "", if_no_date: "false" };
+  }
+  if (op === "date_within_days" || op === "date_outside_days") {
+    return { ...base, op, days: 7, format: "%Y-%m-%d", regex: "", if_no_date: "false" };
   }
   if (op.startsWith("number_")) {
     return { ...base, value: 0, regex: "", if_missing: "false" };
-  }
-  if (op.startsWith("length_")) {
-    return { ...base, value: 0 };
   }
   return base;
 }
@@ -104,7 +113,7 @@ export function defaultConfig(mid: string): Record<string, unknown> {
       return { marker: "[SPLIT]", delete_marker: true, trim_part_start: true, trim_part_end: true };
     case "guard":
       return {
-        ...guardDefaults("date_older_than"),
+        ...guardDefaults("date_outside_days"),
         when_true: "block",
         when_false: "pass",
       };
@@ -393,12 +402,12 @@ function GuardConfigFields({
   pipeline: PipelineStepUI[];
   stepKey: string;
 }) {
-  const op = String(c.op ?? "date_older_than");
-  const { kind, cmp } = parseGuardOp(op);
-  const cmpOptions = GUARD_CMP_BY_KIND[kind] ?? GUARD_CMP_BY_KIND.date;
+  const op = String(c.op ?? "date_outside_days");
+  const { kind, numberCmp, dateOp } = parseGuardOp(op);
   const isDate = kind === "date";
   const isNumber = kind === "number";
-  const isLength = kind === "length";
+  const isDaysDate = isDate && (dateOp === "date_within_days" || dateOp === "date_outside_days");
+  const isAnchorDate = isDate && (dateOp === "date_before_at" || dateOp === "date_after_at");
 
   const gotoLabels = pipelineGotoLabels(pipeline, stepKey);
 
@@ -421,8 +430,7 @@ function GuardConfigFields({
             value={kind}
             onChange={(e) => {
               const nextKind = e.target.value as GuardKind;
-              const nextCmp = (GUARD_CMP_BY_KIND[nextKind] ?? GUARD_CMP_BY_KIND.date)[0].value as GuardCmp;
-              const nextOp = buildGuardOp(nextKind, nextCmp);
+              const nextOp = nextKind === "date" ? "date_outside_days" : "number_gt";
               set({
                 ...guardDefaults(nextOp),
                 when_true: c.when_true ?? "pass",
@@ -439,32 +447,63 @@ function GuardConfigFields({
         </label>
         <label className="field-stack">
           <span className="label-text">{UI.guardCondCmp}</span>
-          <select
-            value={cmp}
-            onChange={(e) => {
-              const nextCmp = e.target.value as GuardCmp;
-              set({ op: buildGuardOp(kind, nextCmp) });
-            }}
-          >
-            {cmpOptions.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          {isDate ? (
+            <select
+              value={dateOp}
+              onChange={(e) => {
+                const nextOp = e.target.value as GuardDateOp;
+                set({
+                  ...guardDefaults(nextOp),
+                  when_true: c.when_true ?? "pass",
+                  when_false: c.when_false ?? "pass",
+                });
+              }}
+            >
+              {GUARD_DATE_OP_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <select
+              value={numberCmp}
+              onChange={(e) => {
+                set({ op: `number_${e.target.value as GuardNumberCmp}` });
+              }}
+            >
+              {(GUARD_CMP_BY_KIND.number ?? []).map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
         </label>
       </div>
+      {isDaysDate && (
+        <label className="field-stack">
+          <span className="label-text">{UI.guardCondDays}</span>
+          <input
+            type="number"
+            min={0}
+            value={String(c.days ?? 7)}
+            onChange={(e) => set({ days: Number(e.target.value) })}
+          />
+        </label>
+      )}
+      {isAnchorDate && (
+        <label className="field-stack">
+          <span className="label-text">{UI.guardCondAnchorAt}</span>
+          <input
+            value={String(c.at ?? "")}
+            placeholder="2020-01-01"
+            onChange={(e) => set({ at: e.target.value })}
+          />
+        </label>
+      )}
       {isDate && (
         <>
-          <label className="field-stack">
-            <span className="label-text">{UI.guardCondDays}</span>
-            <input
-              type="number"
-              min={0}
-              value={String(c.days ?? 7)}
-              onChange={(e) => set({ days: Number(e.target.value) })}
-            />
-          </label>
           <label className="field-stack">
             <span className="label-text">{UI.guardCondFormat}</span>
             <input
@@ -518,20 +557,6 @@ function GuardConfigFields({
             />
             <span>{UI.guardCondIfMissing}</span>
           </label>
-        </>
-      )}
-      {isLength && (
-        <>
-          <label className="field-stack">
-            <span className="label-text">{UI.guardCondThreshold}</span>
-            <input
-              type="number"
-              min={0}
-              value={String(c.value ?? 0)}
-              onChange={(e) => set({ value: Number(e.target.value) })}
-            />
-          </label>
-          {inSelect}
         </>
       )}
       <div className="form-grid-regex">

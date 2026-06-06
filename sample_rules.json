@@ -73,7 +73,7 @@
               {
                 "id": "guard",
                 "config": {
-                  "op": "date_older_than",
+                  "op": "date_outside_days",
                   "days": 7,
                   "in": "region",
                   "when_true": "block",
@@ -103,7 +103,7 @@
               {
                 "id": "guard",
                 "config": {
-                  "op": "date_older_than",
+                  "op": "date_outside_days",
                   "days": 7,
                   "format": "%Y-%m-%d",
                   "in": "region",
@@ -147,7 +147,7 @@
       ]
     },
     {
-      "id": "goto_length_branch",
+      "id": "goto_date_branch",
       "enabled": false,
       "priority": 11,
       "limits": { "max_matches": 1 },
@@ -162,9 +162,10 @@
                 "id": "guard",
                 "label": "s1",
                 "config": {
-                  "op": "length_gt",
-                  "value": 10,
-                  "in": "region",
+                  "op": "date_outside_days",
+                  "days": 7,
+                  "format": "%Y-%m-%d",
+                  "in": "message",
                   "when_true": "goto",
                   "when_true_goto": "s4",
                   "when_false": "goto",
@@ -174,13 +175,13 @@
               {
                 "id": "prepend",
                 "label": "s2",
-                "config": { "prefix": "[短] " }
+                "config": { "prefix": "[新] " }
               },
               {
                 "id": "guard",
                 "label": "s3",
                 "config": {
-                  "op": "length_gte",
+                  "op": "number_gte",
                   "value": 0,
                   "when_true": "stop_rule",
                   "when_false": "stop_rule"
@@ -189,7 +190,7 @@
               {
                 "id": "prepend",
                 "label": "s4",
-                "config": { "prefix": "[长] " }
+                "config": { "prefix": "[旧] " }
               }
             ]
           }
