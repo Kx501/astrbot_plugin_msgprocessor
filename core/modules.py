@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """内置处理模块注册表。
 
-内层模块只对 match_block 已命中的命中段（``region_text``）做变换，不再次执行主 ``matcher``
-（不做第二轮 find_hits / 正则扫描）。replace 默认使用字面量 ``str.replace``。
+变换模块对当前作用域文本（``working_text``）操作，不执行定位/路由。
+replace 默认使用字面量 ``str.replace``。
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ ModuleFn = Callable[[str, dict[str, Any], ProcessingContext, MatchHit | None], M
 
 _BACKSLASH_PLACEHOLDER = "\x00"
 
-_GUARD_OUTCOMES = frozenset({"pass", "block", "stop_rule", "goto"})
+_GUARD_OUTCOMES = frozenset({"pass", "block", "halt", "goto"})
 
 
 def _unescape_config_literal(s: str) -> str:
@@ -49,8 +49,8 @@ def _parse_guard_outcome(raw: Any, *, default: str = "pass") -> str:
 def _guard_result(text: str, outcome: str, cfg: dict[str, Any], when_key: str) -> ModuleResult:
     if outcome == "block":
         return ModuleResult(text="", drop=True)
-    if outcome == "stop_rule":
-        return ModuleResult(text, end_rule=True)
+    if outcome == "halt":
+        return ModuleResult(text, halt=True)
     if outcome == "goto":
         target = str(cfg.get(f"{when_key}_goto") or "").strip()
         if target:
@@ -60,7 +60,7 @@ def _guard_result(text: str, outcome: str, cfg: dict[str, Any], when_key: str) -
 
 
 def mod_guard(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """条件守卫：对命中段做一条运算型判断，按成立/不成立配置 pass / block / stop_rule / goto。"""
+    """条件守卫：对当前作用域文本做运算型判断，按成立/不成立配置 pass / block / halt / goto。"""
     _ = hit
     full = ctx.message if isinstance(ctx.message, str) else text
     matched = eval_condition(text, full, cfg)

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchRules, saveRules } from "./api";
-import { StepsEditor, defaultStepConfig } from "./components/StepsEditor";
+import { PipelineEditor, defaultConfig } from "./components/PipelineEditor";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { TestBench } from "./components/TestBench";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -29,7 +29,10 @@ function emptyRule(): RuleUI {
     enabled: true,
     priority: 0,
     limits: { max_matches: 0 },
-    steps: [{ _key: newKey(), id: "match_block", config: defaultStepConfig("match_block") }],
+    pipeline: [
+      { _key: newKey(), id: "match", label: "s1", config: defaultConfig("match") },
+      { _key: newKey(), id: "noop", label: "s2", config: defaultConfig("noop") },
+    ],
   };
 }
 
@@ -238,9 +241,13 @@ export default function App() {
               </div>
 
               <fieldset className="fieldset">
-                <legend>{UI.sectionSteps}</legend>
+                <legend>{UI.sectionPipeline}</legend>
                 <div className="fieldset-body">
-                  <StepsEditor steps={rule.steps} onChange={(steps) => updateRule({ steps })} />
+                  <p className="muted section-desc pipeline-intro">{UI.pipelineHint}</p>
+                  <PipelineEditor
+                    pipeline={rule.pipeline}
+                    onChange={(pipeline) => updateRule({ pipeline })}
+                  />
                 </div>
               </fieldset>
             </>

@@ -12,14 +12,13 @@ export interface PipelineStepWire {
   config: Record<string, unknown>;
 }
 
-/** 磁盘 rules.json（schema_version 4） */
+/** 磁盘 rules.json（schema_version 5） */
 export interface RuleWire {
   id: string;
   enabled: boolean;
   priority: number;
   limits?: { max_matches?: number; max_message_length?: number };
-  /** 缺省按空数组处理 */
-  steps?: Array<{ id: string; config?: Record<string, unknown> }>;
+  pipeline?: PipelineStepWire[];
 }
 
 export interface RulesDocumentWire {
@@ -31,18 +30,12 @@ export interface PipelineStepUI extends PipelineStepWire {
   _key: string;
 }
 
-export interface RuleStepUI {
-  _key: string;
-  id: string;
-  config: Record<string, unknown>;
-}
-
 export interface RuleUI {
   id: string;
   enabled: boolean;
   priority: number;
   limits?: { max_matches?: number; max_message_length?: number };
-  steps: RuleStepUI[];
+  pipeline: PipelineStepUI[];
 }
 
 export interface RulesDocumentUI {
@@ -127,88 +120,57 @@ export function normalizePipelineLabels(pipeline: PipelineStepUI[]): PipelineSte
   });
 }
 
-function stepWireToUI(s: { id: string; config?: Record<string, unknown> }): RuleStepUI {
-  const c = s.config && typeof s.config === "object" ? { ...s.config } : {};
-  if (s.id === "match_block") {
-    const raw = c.steps;
-    const arr = Array.isArray(raw) ? (raw as PipelineStepWire[]) : [];
-    return {
+function pipelineWireToUI(arr: PipelineStepWire[]): PipelineStepUI[] {
+  return normalizePipelineLabels(
+    arr.map((p) => ({
+      ...p,
       _key: newKey(),
-      id: "match_block",
-      config: {
-        matcher: c.matcher,
-        region: c.region,
-        steps: normalizePipelineLabels(
-          arr.map((p) => ({
-            ...p,
-            _key: newKey(),
-            label: typeof p.label === "string" ? p.label : "",
-            config: p.config && typeof p.config === "object" ? p.config : {},
-          })),
-        ),
-      },
-    };
-  }
-  return { _key: newKey(), id: s.id, config: c };
+      label: typeof p.label === "string" ? p.label : "",
+      config: p.config && typeof p.config === "object" ? p.config : {},
+    })),
+  );
 }
 
 function ruleWireToUI(r: RuleWire): RuleUI {
-  const steps = Array.isArray(r.steps) ? r.steps : [];
+  const pipeline = Array.isArray(r.pipeline) ? r.pipeline : [];
   return {
     id: r.id,
     enabled: r.enabled ?? true,
     priority: Number(r.priority) || 0,
     limits: r.limits,
-    steps: steps.map((s) => stepWireToUI(s)),
+    pipeline: pipelineWireToUI(pipeline),
   };
 }
 
 export function wireToUI(doc: RulesDocumentWire): RulesDocumentUI {
   return {
-    schema_version: doc.schema_version >= 4 ? doc.schema_version : 4,
+    schema_version: doc.schema_version >= 5 ? doc.schema_version : 5,
     rules: (doc.rules ?? []).map((r) => ruleWireToUI(r)),
   };
 }
 
-function stepUIToWire(s: RuleStepUI): { id: string; config: Record<string, unknown> } {
-  if (s.id === "match_block") {
-    const nested = normalizePipelineLabels(
-      (s.config.steps as PipelineStepUI[] | undefined) ?? [],
-    );
-    return {
-      id: "match_block",
-      config: {
-        matcher: s.config.matcher,
-        region: s.config.region,
-        steps: nested.map(({ id, label, config }) => {
-          const wire: PipelineStepWire = {
-            id,
-            config: { ...(config && typeof config === "object" ? config : {}) },
-          };
-          const trimmed = typeof label === "string" ? label.trim() : "";
-          if (trimmed) {
-            wire.label = trimmed;
-          }
-          return wire;
-        }),
-      },
-    };
-  }
-  return {
-    id: s.id,
-    config: { ...s.config },
-  };
-}
-
 export function uiToWire(doc: RulesDocumentUI): RulesDocumentWire {
+  const pipeline = (p: PipelineStepUI[]) =>
+    normalizePipelineLabels(p).map(({ id, label, config }) => {
+      const wire: PipelineStepWire = {
+        id,
+        config: { ...(config && typeof config === "object" ? config : {}) },
+      };
+      const trimmed = typeof label === "string" ? label.trim() : "";
+      if (trimmed) {
+        wire.label = trimmed;
+      }
+      return wire;
+    });
+
   return {
-    schema_version: 4,
+    schema_version: 5,
     rules: doc.rules.map((r) => ({
       id: r.id,
       enabled: r.enabled,
       priority: r.priority,
       limits: r.limits,
-      steps: r.steps.map((s) => stepUIToWire(s)),
+      pipeline: pipeline(r.pipeline),
     })),
   };
 }

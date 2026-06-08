@@ -27,7 +27,7 @@ class ProcessBody(BaseModel):
 
 
 class RulesDocument(BaseModel):
-    schema_version: int = 4
+    schema_version: int = 5
     rules: list
 
 

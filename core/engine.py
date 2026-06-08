@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""规则引擎：`rules` 中的 `steps`（match_block / end_rule）。"""
+"""规则引擎：按 priority 依次执行各规则的扁平 pipeline。"""
 from __future__ import annotations
 
 from typing import Any
 
 from .models import ProcessResult, ProcessSegment
-from .steps import RuleExecContext, normalize_rule_steps, run_rule_steps, run_rule_steps_async
+from .steps import RuleExecContext, normalize_rule_pipeline, run_rule_pipeline, run_rule_pipeline_async
 
 ProcessOutput = str | list[str] | None
 
@@ -40,15 +40,15 @@ def _apply_rule(message: str, rule: dict[str, Any], meta: dict[str, Any]) -> Pro
         return message
 
     rid = str(rule.get("id", ""))
-    steps = normalize_rule_steps(rule)
+    pipeline = normalize_rule_pipeline(rule)
     ctx = RuleExecContext(
         message=message,
         rule_id=rid,
         meta=dict(meta),
         limits=rule.get("limits") if isinstance(rule.get("limits"), dict) else {},
-        stop_rule=False,
+        halt=False,
     )
-    run_rule_steps(ctx, steps)
+    run_rule_pipeline(ctx, pipeline)
     if ctx.dropped:
         return None
     if ctx.split_parts:
@@ -61,15 +61,15 @@ async def _apply_rule_async(message: str, rule: dict[str, Any], meta: dict[str, 
         return message
 
     rid = str(rule.get("id", ""))
-    steps = normalize_rule_steps(rule)
+    pipeline = normalize_rule_pipeline(rule)
     ctx = RuleExecContext(
         message=message,
         rule_id=rid,
         meta=dict(meta),
         limits=rule.get("limits") if isinstance(rule.get("limits"), dict) else {},
-        stop_rule=False,
+        halt=False,
     )
-    await run_rule_steps_async(ctx, steps)
+    await run_rule_pipeline_async(ctx, pipeline)
     if ctx.dropped:
         return None
     if ctx.split_parts:

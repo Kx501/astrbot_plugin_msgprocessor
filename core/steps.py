@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""规则步骤：match_block（matcher + region + 内层模块）、end_rule。"""
+"""规则流水线：扁平 pipeline，match 步骤定位作用域，其余步骤变换 working_text。"""
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
@@ -10,14 +10,10 @@ from .matchers import find_hits
 from .models import MatchHit, ModuleResult, ProcessingContext
 from .modules import get_module, translate_llm_fallback
 
-StepFn = Callable[["RuleExecContext", dict[str, Any]], None]
-AsyncStepFn = Callable[["RuleExecContext", dict[str, Any]], Awaitable[None]]
+TranslateLlmSync = Callable[[str, dict[str, Any], ProcessingContext, MatchHit | None], str]
+TranslateLlmAsync = Callable[[str, dict[str, Any], ProcessingContext, MatchHit | None], Awaitable[str]]
 
-TranslateLlmSync = Callable[[str, dict[str, Any], ProcessingContext, MatchHit], str]
-TranslateLlmAsync = Callable[[str, dict[str, Any], ProcessingContext, MatchHit], Awaitable[str]]
-
-# goto 循环保护：线性执行最多 n 次，额外允许少量回跳（正常规则远用不满）
-_INNER_PIPELINE_MAX_EXTRA_ITERS = 20
+_PIPELINE_MAX_EXTRA_ITERS = 20
 
 
 def _non_overlapping_hits(hits: list[MatchHit]) -> list[MatchHit]:
@@ -36,7 +32,6 @@ def _parse_max_matches(limits: dict[str, Any]) -> int:
         max_matches = int(limits.get("max_matches", 0))
     except (TypeError, ValueError):
         max_matches = 0
-    # 0 或负数视为无限；正数沿用上限保护
     if max_matches <= 0:
         return 0
     return min(max_matches, 256)
@@ -55,7 +50,7 @@ class RuleExecContext:
     rule_id: str
     meta: dict[str, Any]
     limits: dict[str, Any]
-    stop_rule: bool = False
+    halt: bool = False
     split_parts: list[str] | None = None
     dropped: bool = False
 
@@ -63,21 +58,21 @@ class RuleExecContext:
 @dataclass
 class _StepEffect:
     dropped: bool = False
-    end_rule: bool = False
+    halt: bool = False
     goto: str | None = None
 
 
 @dataclass
-class InnerPipelineResult:
+class _SegmentResult:
     payload: str | list[str] | None = None
-    end_rule: bool = False
+    halt: bool = False
 
 
 def _apply_one_module_step(
     text: str,
     st: dict[str, Any],
     pctx: ProcessingContext,
-    hit: MatchHit,
+    hit: MatchHit | None,
     *,
     on_translate_llm: TranslateLlmSync,
 ) -> ModuleResult:
@@ -87,8 +82,6 @@ def _apply_one_module_step(
     scfg = st.get("config") if isinstance(st.get("config"), dict) else {}
     if mid == "translate_llm":
         return ModuleResult(on_translate_llm(text, scfg, pctx, hit))
-    if mid == "translate_stub":
-        return ModuleResult(translate_llm_fallback(text, scfg))
     if mid == "translate_stub":
         return ModuleResult(translate_llm_fallback(text, scfg))
     fn = get_module(mid)
@@ -101,7 +94,7 @@ async def _apply_one_module_step_async(
     text: str,
     st: dict[str, Any],
     pctx: ProcessingContext,
-    hit: MatchHit,
+    hit: MatchHit | None,
     *,
     on_translate_llm: TranslateLlmAsync,
 ) -> ModuleResult:
@@ -121,7 +114,7 @@ async def _apply_one_module_step_async(
 
 def _effect_from_result(res: ModuleResult) -> _StepEffect:
     goto = res.goto if isinstance(res.goto, str) and res.goto.strip() else None
-    return _StepEffect(dropped=bool(res.drop), end_rule=bool(res.end_rule), goto=goto)
+    return _StepEffect(dropped=bool(res.drop), halt=bool(res.halt), goto=goto)
 
 
 def _build_step_label_index(steps: list) -> dict[str, int]:
@@ -153,7 +146,7 @@ def _consume_module_result(
     eff = _effect_from_result(res)
     if eff.dropped:
         return text, None, eff
-    if eff.end_rule:
+    if eff.halt:
         return res.text, None, eff
     if eff.goto:
         return res.text, None, eff
@@ -166,7 +159,7 @@ def _run_parts_through_step(
     parts: list[str],
     st: dict[str, Any],
     pctx: ProcessingContext,
-    hit: MatchHit,
+    hit: MatchHit | None,
     *,
     on_translate_llm: TranslateLlmSync,
 ) -> tuple[list[str], _StepEffect]:
@@ -181,8 +174,8 @@ def _run_parts_through_step(
             eff.goto = step_eff.goto
             out.append(new_text)
             return out, eff
-        if step_eff.end_rule:
-            eff.end_rule = True
+        if step_eff.halt:
+            eff.halt = True
             out.append(new_text)
             break
         if split_parts:
@@ -196,7 +189,7 @@ async def _run_parts_through_step_async(
     parts: list[str],
     st: dict[str, Any],
     pctx: ProcessingContext,
-    hit: MatchHit,
+    hit: MatchHit | None,
     *,
     on_translate_llm: TranslateLlmAsync,
 ) -> tuple[list[str], _StepEffect]:
@@ -211,8 +204,8 @@ async def _run_parts_through_step_async(
             eff.goto = step_eff.goto
             out.append(new_text)
             return out, eff
-        if step_eff.end_rule:
-            eff.end_rule = True
+        if step_eff.halt:
+            eff.halt = True
             out.append(new_text)
             break
         if split_parts:
@@ -222,21 +215,21 @@ async def _run_parts_through_step_async(
     return out, eff
 
 
-def _run_inner_pipeline(
+def _run_transform_segment(
     region_text: str,
     sub: list,
     pctx: ProcessingContext,
-    hit: MatchHit,
+    hit: MatchHit | None,
     *,
     on_translate_llm: TranslateLlmSync,
-) -> InnerPipelineResult:
+) -> _SegmentResult:
     labels = _build_step_label_index(sub)
     split_parts: list[str] | None = None
-    end_rule = False
+    halt = False
     i = 0
     n = len(sub)
     guard_iters = 0
-    max_iters = n + _INNER_PIPELINE_MAX_EXTRA_ITERS
+    max_iters = n + _PIPELINE_MAX_EXTRA_ITERS
     while i < n:
         guard_iters += 1
         if guard_iters > max_iters:
@@ -253,23 +246,23 @@ def _run_inner_pipeline(
                 hit,
                 on_translate_llm=on_translate_llm,
             )
-            if step_eff.end_rule:
-                end_rule = True
+            if step_eff.halt:
+                halt = True
             if step_eff.goto:
                 i = _resolve_goto_index(labels, step_eff.goto, fallback=i + 1)
                 continue
             if not split_parts:
-                return InnerPipelineResult(payload=None)
-            if end_rule:
-                return InnerPipelineResult(payload=split_parts, end_rule=True)
+                return _SegmentResult(payload=None)
+            if halt:
+                return _SegmentResult(payload=split_parts, halt=True)
             i += 1
             continue
         res = _apply_one_module_step(region_text, st, pctx, hit, on_translate_llm=on_translate_llm)
         region_text, new_split, step_eff = _consume_module_result(region_text, res)
         if step_eff.dropped:
-            return InnerPipelineResult(payload=None)
-        if step_eff.end_rule:
-            end_rule = True
+            return _SegmentResult(payload=None)
+        if step_eff.halt:
+            halt = True
             if new_split:
                 split_parts = new_split
             break
@@ -281,25 +274,25 @@ def _run_inner_pipeline(
         i += 1
     if split_parts is not None:
         payload: str | list[str] | None = split_parts if split_parts else None
-        return InnerPipelineResult(payload=payload, end_rule=end_rule)
-    return InnerPipelineResult(payload=region_text, end_rule=end_rule)
+        return _SegmentResult(payload=payload, halt=halt)
+    return _SegmentResult(payload=region_text, halt=halt)
 
 
-async def _run_inner_pipeline_async(
+async def _run_transform_segment_async(
     region_text: str,
     sub: list,
     pctx: ProcessingContext,
-    hit: MatchHit,
+    hit: MatchHit | None,
     *,
     on_translate_llm: TranslateLlmAsync,
-) -> InnerPipelineResult:
+) -> _SegmentResult:
     labels = _build_step_label_index(sub)
     split_parts: list[str] | None = None
-    end_rule = False
+    halt = False
     i = 0
     n = len(sub)
     guard_iters = 0
-    max_iters = n + _INNER_PIPELINE_MAX_EXTRA_ITERS
+    max_iters = n + _PIPELINE_MAX_EXTRA_ITERS
     while i < n:
         guard_iters += 1
         if guard_iters > max_iters:
@@ -316,23 +309,23 @@ async def _run_inner_pipeline_async(
                 hit,
                 on_translate_llm=on_translate_llm,
             )
-            if step_eff.end_rule:
-                end_rule = True
+            if step_eff.halt:
+                halt = True
             if step_eff.goto:
                 i = _resolve_goto_index(labels, step_eff.goto, fallback=i + 1)
                 continue
             if not split_parts:
-                return InnerPipelineResult(payload=None)
-            if end_rule:
-                return InnerPipelineResult(payload=split_parts, end_rule=True)
+                return _SegmentResult(payload=None)
+            if halt:
+                return _SegmentResult(payload=split_parts, halt=True)
             i += 1
             continue
         res = await _apply_one_module_step_async(region_text, st, pctx, hit, on_translate_llm=on_translate_llm)
         region_text, new_split, step_eff = _consume_module_result(region_text, res)
         if step_eff.dropped:
-            return InnerPipelineResult(payload=None)
-        if step_eff.end_rule:
-            end_rule = True
+            return _SegmentResult(payload=None)
+        if step_eff.halt:
+            halt = True
             if new_split:
                 split_parts = new_split
             break
@@ -344,25 +337,8 @@ async def _run_inner_pipeline_async(
         i += 1
     if split_parts is not None:
         payload: str | list[str] | None = split_parts if split_parts else None
-        return InnerPipelineResult(payload=payload, end_rule=end_rule)
-    return InnerPipelineResult(payload=region_text, end_rule=end_rule)
-
-
-def _apply_inner_result(ctx: RuleExecContext, buf: str, hit: MatchHit, result: InnerPipelineResult) -> None:
-    if result.payload is None:
-        ctx.dropped = True
-        ctx.stop_rule = True
-        return
-    s, e = hit.region_span.start, hit.region_span.end
-    pipeline_out = result.payload
-    if isinstance(pipeline_out, list):
-        ctx.split_parts = _merge_split_with_surround(buf[:s], pipeline_out, buf[e:])
-        ctx.message = ctx.split_parts[0] if ctx.split_parts else buf
-        ctx.stop_rule = True
-        return
-    ctx.message = buf[:s] + pipeline_out + buf[e:]
-    if result.end_rule:
-        ctx.stop_rule = True
+        return _SegmentResult(payload=payload, halt=halt)
+    return _SegmentResult(payload=region_text, halt=halt)
 
 
 def _merge_split_with_surround(prefix: str, parts: list[str], suffix: str) -> list[str]:
@@ -374,164 +350,306 @@ def _merge_split_with_surround(prefix: str, parts: list[str], suffix: str) -> li
     return [prefix + parts[0]] + parts[1:-1] + [parts[-1] + suffix]
 
 
-def step_match_block(ctx: RuleExecContext, cfg: dict[str, Any]) -> None:
-    matcher_cfg = cfg.get("matcher") if isinstance(cfg.get("matcher"), dict) else None
-    if matcher_cfg is None:
-        matcher_cfg = {"type": "regex", "pattern": ".*"}
-    region_cfg = cfg.get("region") if isinstance(cfg.get("region"), dict) else None
-    sub = cfg.get("steps")
-    if not isinstance(sub, list):
-        sub = []
+def _apply_hit_result(ctx: RuleExecContext, buf: str, hit: MatchHit, result: _SegmentResult) -> None:
+    if result.payload is None:
+        ctx.dropped = True
+        ctx.halt = True
+        return
+    s, e = hit.region_span.start, hit.region_span.end
+    pipeline_out = result.payload
+    if isinstance(pipeline_out, list):
+        ctx.split_parts = _merge_split_with_surround(buf[:s], pipeline_out, buf[e:])
+        ctx.message = ctx.split_parts[0] if ctx.split_parts else buf
+        ctx.halt = True
+        return
+    ctx.message = buf[:s] + pipeline_out + buf[e:]
+    if result.halt:
+        ctx.halt = True
 
-    message = ctx.message
+
+def _apply_full_message_result(ctx: RuleExecContext, result: _SegmentResult) -> None:
+    if result.payload is None:
+        ctx.dropped = True
+        ctx.halt = True
+        return
+    if isinstance(result.payload, list):
+        ctx.split_parts = result.payload
+        ctx.message = result.payload[0] if result.payload else ctx.message
+        ctx.halt = True
+        return
+    ctx.message = result.payload
+    if result.halt:
+        ctx.halt = True
+
+
+def _next_match_index(pipeline: list, start: int, end: int) -> int:
+    for j in range(start, end):
+        if isinstance(pipeline[j], dict) and pipeline[j].get("id") == "match":
+            return j
+    return end
+
+
+def _run_match_step(
+    ctx: RuleExecContext,
+    pipeline: list,
+    match_idx: int,
+    end: int,
+    *,
+    on_translate_llm: TranslateLlmSync,
+) -> None:
+    step = pipeline[match_idx]
+    cfg = step.get("config") if isinstance(step.get("config"), dict) else {}
+    matcher_cfg = cfg.get("matcher") if isinstance(cfg.get("matcher"), dict) else {"type": "regex", "pattern": ".*"}
+    region_cfg = cfg.get("region") if isinstance(cfg.get("region"), dict) else None
+
     max_matches = _parse_max_matches(ctx.limits)
-    hits = find_hits(
-        message,
-        0,
-        matcher_cfg,
-        region_cfg,
-        max_matches=max_matches,
-    )
+    hits = find_hits(ctx.message, 0, matcher_cfg, region_cfg, max_matches=max_matches)
     if not hits:
         return
     hits = _non_overlapping_hits(hits)
 
     max_len = _parse_max_len(ctx.limits)
-    buf = message
+    buf = ctx.message
     if len(buf) > max_len:
-        ctx.stop_rule = True
+        ctx.halt = True
         return
 
-    rid = ctx.rule_id
+    sub_start = match_idx + 1
+    sub_end = _next_match_index(pipeline, sub_start, end)
+    sub = pipeline[sub_start:sub_end]
+
     hit_count = len(hits)
-    # 自右向左替换，避免前面的改写打乱后面的下标（hits 已按起点升序）
     for doc_idx in range(hit_count - 1, -1, -1):
         hit = hits[doc_idx]
         base_extra = dict(ctx.meta) if isinstance(ctx.meta, dict) else {}
         base_extra["hit_index"] = doc_idx
         base_extra["hit_count"] = hit_count
-        pctx = ProcessingContext(message=buf, rule_id=rid, extra=base_extra)
-        inner = _run_inner_pipeline(
+        pctx = ProcessingContext(message=buf, rule_id=ctx.rule_id, extra=base_extra)
+        inner = _run_transform_segment(
             hit.region_text,
             sub,
             pctx,
             hit,
-            on_translate_llm=lambda t, sc, pc, h: translate_llm_fallback(t, sc),
+            on_translate_llm=on_translate_llm,
         )
-        _apply_inner_result(ctx, buf, hit, inner)
-        if ctx.dropped or ctx.stop_rule or ctx.split_parts is not None:
+        _apply_hit_result(ctx, buf, hit, inner)
+        if ctx.dropped or ctx.halt or ctx.split_parts is not None:
             return
         buf = ctx.message
     ctx.message = buf
 
 
-async def step_match_block_async(ctx: RuleExecContext, cfg: dict[str, Any]) -> None:
-    matcher_cfg = cfg.get("matcher") if isinstance(cfg.get("matcher"), dict) else None
-    if matcher_cfg is None:
-        matcher_cfg = {"type": "regex", "pattern": ".*"}
+async def _run_match_step_async(
+    ctx: RuleExecContext,
+    pipeline: list,
+    match_idx: int,
+    end: int,
+    *,
+    on_translate_llm: TranslateLlmAsync,
+) -> None:
+    step = pipeline[match_idx]
+    cfg = step.get("config") if isinstance(step.get("config"), dict) else {}
+    matcher_cfg = cfg.get("matcher") if isinstance(cfg.get("matcher"), dict) else {"type": "regex", "pattern": ".*"}
     region_cfg = cfg.get("region") if isinstance(cfg.get("region"), dict) else None
-    sub = cfg.get("steps")
-    if not isinstance(sub, list):
-        sub = []
 
-    message = ctx.message
     max_matches = _parse_max_matches(ctx.limits)
-    hits = find_hits(
-        message,
-        0,
-        matcher_cfg,
-        region_cfg,
-        max_matches=max_matches,
-    )
+    hits = find_hits(ctx.message, 0, matcher_cfg, region_cfg, max_matches=max_matches)
     if not hits:
         return
     hits = _non_overlapping_hits(hits)
 
     max_len = _parse_max_len(ctx.limits)
-    buf = message
+    buf = ctx.message
     if len(buf) > max_len:
-        ctx.stop_rule = True
+        ctx.halt = True
         return
 
-    rid = ctx.rule_id
-    hit_count = len(hits)
+    sub_start = match_idx + 1
+    sub_end = _next_match_index(pipeline, sub_start, end)
+    sub = pipeline[sub_start:sub_end]
 
-    async def _on_tl(t: str, sc: dict[str, Any], pc: ProcessingContext, h: MatchHit) -> str:
+    hit_count = len(hits)
+    for doc_idx in range(hit_count - 1, -1, -1):
+        hit = hits[doc_idx]
+        base_extra = dict(ctx.meta) if isinstance(ctx.meta, dict) else {}
+        base_extra["hit_index"] = doc_idx
+        base_extra["hit_count"] = hit_count
+        pctx = ProcessingContext(message=buf, rule_id=ctx.rule_id, extra=base_extra)
+        inner = await _run_transform_segment_async(
+            hit.region_text,
+            sub,
+            pctx,
+            hit,
+            on_translate_llm=on_translate_llm,
+        )
+        _apply_hit_result(ctx, buf, hit, inner)
+        if ctx.dropped or ctx.halt or ctx.split_parts is not None:
+            return
+        buf = ctx.message
+    ctx.message = buf
+
+
+def _run_full_message_step(
+    ctx: RuleExecContext,
+    step: dict[str, Any],
+    *,
+    on_translate_llm: TranslateLlmSync,
+) -> None:
+    pctx = ProcessingContext(
+        message=ctx.message,
+        rule_id=ctx.rule_id,
+        extra=dict(ctx.meta) if isinstance(ctx.meta, dict) else {},
+    )
+    res = _apply_one_module_step(ctx.message, step, pctx, None, on_translate_llm=on_translate_llm)
+    new_text, split_parts, eff = _consume_module_result(ctx.message, res)
+    if eff.dropped:
+        ctx.dropped = True
+        ctx.halt = True
+        return
+    if split_parts:
+        ctx.split_parts = split_parts
+        ctx.message = split_parts[0] if split_parts else ctx.message
+        ctx.halt = True
+        return
+    ctx.message = new_text
+    if eff.halt:
+        ctx.halt = True
+
+
+async def _run_full_message_step_async(
+    ctx: RuleExecContext,
+    step: dict[str, Any],
+    *,
+    on_translate_llm: TranslateLlmAsync,
+) -> None:
+    pctx = ProcessingContext(
+        message=ctx.message,
+        rule_id=ctx.rule_id,
+        extra=dict(ctx.meta) if isinstance(ctx.meta, dict) else {},
+    )
+    res = await _apply_one_module_step_async(ctx.message, step, pctx, None, on_translate_llm=on_translate_llm)
+    new_text, split_parts, eff = _consume_module_result(ctx.message, res)
+    if eff.dropped:
+        ctx.dropped = True
+        ctx.halt = True
+        return
+    if split_parts:
+        ctx.split_parts = split_parts
+        ctx.message = split_parts[0] if split_parts else ctx.message
+        ctx.halt = True
+        return
+    ctx.message = new_text
+    if eff.halt:
+        ctx.halt = True
+
+
+def run_rule_pipeline(ctx: RuleExecContext, pipeline: list[dict[str, Any]]) -> None:
+    """执行扁平 pipeline。match 未命中时跳过直至下一个 match；默认作用域为整段消息。"""
+    skip_until_match = False
+    i = 0
+    n = len(pipeline)
+
+    while i < n:
+        if ctx.halt or ctx.dropped:
+            break
+        step = pipeline[i]
+        if not isinstance(step, dict):
+            i += 1
+            continue
+        sid = step.get("id")
+        if not isinstance(sid, str):
+            i += 1
+            continue
+
+        if skip_until_match:
+            if sid != "match":
+                i += 1
+                continue
+            skip_until_match = False
+
+        if sid == "match":
+            cfg = step.get("config") if isinstance(step.get("config"), dict) else {}
+            matcher_cfg = cfg.get("matcher") if isinstance(cfg.get("matcher"), dict) else {"type": "regex", "pattern": ".*"}
+            region_cfg = cfg.get("region") if isinstance(cfg.get("region"), dict) else None
+            max_matches = _parse_max_matches(ctx.limits)
+            hits = find_hits(ctx.message, 0, matcher_cfg, region_cfg, max_matches=max_matches)
+            if not hits:
+                skip_until_match = True
+                i += 1
+                continue
+            _run_match_step(
+                ctx,
+                pipeline,
+                i,
+                n,
+                on_translate_llm=lambda t, sc, pc, h: translate_llm_fallback(t, sc),
+            )
+            if ctx.dropped or ctx.halt or ctx.split_parts is not None:
+                break
+            sub_end = _next_match_index(pipeline, i + 1, n)
+            i = sub_end
+            continue
+
+        _run_full_message_step(
+            ctx,
+            step,
+            on_translate_llm=lambda t, sc, pc, h: translate_llm_fallback(t, sc),
+        )
+        i += 1
+
+
+async def run_rule_pipeline_async(ctx: RuleExecContext, pipeline: list[dict[str, Any]]) -> None:
+    skip_until_match = False
+    i = 0
+    n = len(pipeline)
+
+    async def _on_tl(t: str, sc: dict[str, Any], pc: ProcessingContext, h: MatchHit | None) -> str:
         fn = ctx.meta.get("translate_llm")
         if callable(fn):
             return await fn(t, sc, pc, h)
         return translate_llm_fallback(t, sc)
 
-    for doc_idx in range(hit_count - 1, -1, -1):
-        hit = hits[doc_idx]
-        base_extra = dict(ctx.meta) if isinstance(ctx.meta, dict) else {}
-        base_extra["hit_index"] = doc_idx
-        base_extra["hit_count"] = hit_count
-        pctx = ProcessingContext(message=buf, rule_id=rid, extra=base_extra)
-        inner = await _run_inner_pipeline_async(
-            hit.region_text,
-            sub,
-            pctx,
-            hit,
-            on_translate_llm=_on_tl,
-        )
-        _apply_inner_result(ctx, buf, hit, inner)
-        if ctx.dropped or ctx.stop_rule or ctx.split_parts is not None:
-            return
-        buf = ctx.message
-    ctx.message = buf
+    while i < n:
+        if ctx.halt or ctx.dropped:
+            break
+        step = pipeline[i]
+        if not isinstance(step, dict):
+            i += 1
+            continue
+        sid = step.get("id")
+        if not isinstance(sid, str):
+            i += 1
+            continue
+
+        if skip_until_match:
+            if sid != "match":
+                i += 1
+                continue
+            skip_until_match = False
+
+        if sid == "match":
+            cfg = step.get("config") if isinstance(step.get("config"), dict) else {}
+            matcher_cfg = cfg.get("matcher") if isinstance(cfg.get("matcher"), dict) else {"type": "regex", "pattern": ".*"}
+            region_cfg = cfg.get("region") if isinstance(cfg.get("region"), dict) else None
+            max_matches = _parse_max_matches(ctx.limits)
+            hits = find_hits(ctx.message, 0, matcher_cfg, region_cfg, max_matches=max_matches)
+            if not hits:
+                skip_until_match = True
+                i += 1
+                continue
+            await _run_match_step_async(ctx, pipeline, i, n, on_translate_llm=_on_tl)
+            if ctx.dropped or ctx.halt or ctx.split_parts is not None:
+                break
+            sub_end = _next_match_index(pipeline, i + 1, n)
+            i = sub_end
+            continue
+
+        await _run_full_message_step_async(ctx, step, on_translate_llm=_on_tl)
+        i += 1
 
 
-def step_end_rule(ctx: RuleExecContext, cfg: dict[str, Any]) -> None:
-    _ = cfg
-    ctx.stop_rule = True
-
-
-async def step_end_rule_async(ctx: RuleExecContext, cfg: dict[str, Any]) -> None:
-    step_end_rule(ctx, cfg)
-
-
-STEP_HANDLERS: dict[str, StepFn] = {
-    "match_block": step_match_block,
-    "end_rule": step_end_rule,
-}
-
-STEP_HANDLERS_ASYNC: dict[str, AsyncStepFn] = {
-    "match_block": step_match_block_async,
-    "end_rule": step_end_rule_async,
-}
-
-
-def normalize_rule_steps(rule: dict[str, Any]) -> list[dict[str, Any]]:
-    raw = rule.get("steps")
+def normalize_rule_pipeline(rule: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = rule.get("pipeline")
     if not isinstance(raw, list):
         return []
     return [s for s in raw if isinstance(s, dict)]
-
-
-def run_rule_steps(ctx: RuleExecContext, steps: list[dict[str, Any]]) -> None:
-    for step in steps:
-        if ctx.stop_rule:
-            break
-        sid = step.get("id")
-        if not isinstance(sid, str):
-            continue
-        fn = STEP_HANDLERS.get(sid)
-        if fn is None:
-            continue
-        cfg = step.get("config") if isinstance(step.get("config"), dict) else {}
-        fn(ctx, cfg)
-
-
-async def run_rule_steps_async(ctx: RuleExecContext, steps: list[dict[str, Any]]) -> None:
-    for step in steps:
-        if ctx.stop_rule:
-            break
-        sid = step.get("id")
-        if not isinstance(sid, str):
-            continue
-        fn = STEP_HANDLERS_ASYNC.get(sid)
-        if fn is None:
-            continue
-        cfg = step.get("config") if isinstance(step.get("config"), dict) else {}
-        await fn(ctx, cfg)

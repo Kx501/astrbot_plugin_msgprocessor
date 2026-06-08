@@ -162,24 +162,24 @@ class MsgProcessorStar(Star):
             shutil.copy2(_SAMPLE_RULES, self._rules_path)
             ab_logger.info("MsgProcessor: 已从 sample_rules.json 初始化 %s", self._rules_path)
         else:
-            stub = {"schema_version": 4, "rules": []}
+            stub = {"schema_version": 5, "rules": []}
             with open(self._rules_path, "w", encoding="utf-8") as f:
                 json.dump(stub, f, ensure_ascii=False, indent=2)
 
     def _rules_doc(self) -> dict[str, Any]:
         if not self._rules_path.is_file():
-            return {"schema_version": 4, "rules": []}
+            return {"schema_version": 5, "rules": []}
         try:
             mtime = self._rules_path.stat().st_mtime
         except OSError:
-            return {"schema_version": 4, "rules": []}
+            return {"schema_version": 5, "rules": []}
         if self._rules_cache is not None and self._rules_mtime == mtime:
             return self._rules_cache
         try:
             doc = load_rules_from_path(self._rules_path)
         except Exception:
             ab_logger.exception("MsgProcessor: 加载 rules.json 失败")
-            return {"schema_version": 4, "rules": []}
+            return {"schema_version": 5, "rules": []}
         self._rules_mtime = mtime
         self._rules_cache = doc
         return doc

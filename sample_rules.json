@@ -1,27 +1,25 @@
 {
-  "schema_version": 4,
+  "schema_version": 5,
   "rules": [
     {
       "id": "inside_brackets",
       "enabled": true,
       "priority": 10,
       "limits": { "max_matches": 8 },
-      "steps": [
+      "pipeline": [
         {
-          "id": "match_block",
+          "id": "match",
           "config": {
             "matcher": {
               "type": "anchor_slice",
               "start": { "literal": "【", "occurrence": 0, "inclusive": false },
               "end": { "literal": "】", "occurrence": 0, "inclusive": false }
             },
-            "region": { "kind": "match" },
-            "steps": [
-              { "id": "prepend", "config": { "prefix": "[译]" } },
-              { "id": "append", "config": { "text": "◆" } }
-            ]
+            "region": { "kind": "match" }
           }
-        }
+        },
+        { "id": "prepend", "config": { "prefix": "[译]" } },
+        { "id": "append", "config": { "text": "◆" } }
       ]
     },
     {
@@ -29,15 +27,15 @@
       "enabled": false,
       "priority": 8,
       "limits": { "max_matches": 1 },
-      "steps": [
+      "pipeline": [
         {
-          "id": "match_block",
+          "id": "match",
           "config": {
             "matcher": { "type": "passthrough" },
-            "region": { "kind": "match" },
-            "steps": [{ "id": "prepend", "config": { "prefix": "[整段]" } }]
+            "region": { "kind": "match" }
           }
-        }
+        },
+        { "id": "prepend", "config": { "prefix": "[整段]" } }
       ]
     },
     {
@@ -45,17 +43,15 @@
       "enabled": false,
       "priority": 9,
       "limits": { "max_matches": 1 },
-      "steps": [
+      "pipeline": [
         {
-          "id": "match_block",
+          "id": "match",
           "config": {
             "matcher": { "type": "passthrough" },
-            "region": { "kind": "match" },
-            "steps": [
-              { "id": "split", "config": { "marker": "---", "delete_marker": true } }
-            ]
+            "region": { "kind": "match" }
           }
-        }
+        },
+        { "id": "split", "config": { "marker": "---", "delete_marker": true } }
       ]
     },
     {
@@ -63,24 +59,21 @@
       "enabled": false,
       "priority": 12,
       "limits": { "max_matches": 1 },
-      "steps": [
+      "pipeline": [
         {
-          "id": "match_block",
+          "id": "match",
           "config": {
             "matcher": { "type": "passthrough" },
-            "region": { "kind": "match" },
-            "steps": [
-              {
-                "id": "guard",
-                "config": {
-                  "op": "date_outside_days",
-                  "days": 7,
-                  "in": "region",
-                  "when_true": "block",
-                  "when_false": "pass"
-                }
-              }
-            ]
+            "region": { "kind": "match" }
+          }
+        },
+        {
+          "id": "guard",
+          "config": {
+            "op": "date_outside_days",
+            "days": 7,
+            "when_true": "block",
+            "when_false": "pass"
           }
         }
       ]
@@ -90,28 +83,25 @@
       "enabled": false,
       "priority": 11,
       "limits": { "max_matches": 1 },
-      "steps": [
+      "pipeline": [
         {
-          "id": "match_block",
+          "id": "match",
           "config": {
             "matcher": {
               "type": "regex",
               "pattern": "发布日期[:：]\\s*(\\d{4}-\\d{2}-\\d{2})"
             },
-            "region": { "kind": "group", "index": 1 },
-            "steps": [
-              {
-                "id": "guard",
-                "config": {
-                  "op": "date_outside_days",
-                  "days": 7,
-                  "format": "%Y-%m-%d",
-                  "in": "region",
-                  "when_true": "block",
-                  "when_false": "pass"
-                }
-              }
-            ]
+            "region": { "kind": "group", "index": 1 }
+          }
+        },
+        {
+          "id": "guard",
+          "config": {
+            "op": "date_outside_days",
+            "days": 7,
+            "format": "%Y-%m-%d",
+            "when_true": "block",
+            "when_false": "pass"
           }
         }
       ]
@@ -121,27 +111,24 @@
       "enabled": false,
       "priority": 10,
       "limits": { "max_matches": 1 },
-      "steps": [
+      "pipeline": [
         {
-          "id": "match_block",
+          "id": "match",
           "config": {
             "matcher": {
               "type": "regex",
               "pattern": "CVSS[:：]\\s*([0-9.]+)"
             },
-            "region": { "kind": "group", "index": 1 },
-            "steps": [
-              {
-                "id": "guard",
-                "config": {
-                  "op": "number_gte",
-                  "value": 9,
-                  "in": "region",
-                  "when_true": "block",
-                  "when_false": "pass"
-                }
-              }
-            ]
+            "region": { "kind": "group", "index": 1 }
+          }
+        },
+        {
+          "id": "guard",
+          "config": {
+            "op": "number_gte",
+            "value": 9,
+            "when_true": "block",
+            "when_false": "pass"
           }
         }
       ]
@@ -151,49 +138,46 @@
       "enabled": false,
       "priority": 11,
       "limits": { "max_matches": 1 },
-      "steps": [
+      "pipeline": [
         {
-          "id": "match_block",
+          "id": "match",
           "config": {
             "matcher": { "type": "passthrough" },
-            "region": { "kind": "match" },
-            "steps": [
-              {
-                "id": "guard",
-                "label": "s1",
-                "config": {
-                  "op": "date_outside_days",
-                  "days": 7,
-                  "format": "%Y-%m-%d",
-                  "in": "message",
-                  "when_true": "goto",
-                  "when_true_goto": "s4",
-                  "when_false": "goto",
-                  "when_false_goto": "s2"
-                }
-              },
-              {
-                "id": "prepend",
-                "label": "s2",
-                "config": { "prefix": "[新] " }
-              },
-              {
-                "id": "guard",
-                "label": "s3",
-                "config": {
-                  "op": "number_gte",
-                  "value": 0,
-                  "when_true": "stop_rule",
-                  "when_false": "stop_rule"
-                }
-              },
-              {
-                "id": "prepend",
-                "label": "s4",
-                "config": { "prefix": "[旧] " }
-              }
-            ]
+            "region": { "kind": "match" }
           }
+        },
+        {
+          "id": "guard",
+          "label": "s1",
+          "config": {
+            "op": "date_outside_days",
+            "days": 7,
+            "format": "%Y-%m-%d",
+            "when_true": "goto",
+            "when_true_goto": "s4",
+            "when_false": "goto",
+            "when_false_goto": "s2"
+          }
+        },
+        {
+          "id": "prepend",
+          "label": "s2",
+          "config": { "prefix": "[新] " }
+        },
+        {
+          "id": "guard",
+          "label": "s3",
+          "config": {
+            "op": "number_gte",
+            "value": 0,
+            "when_true": "halt",
+            "when_false": "halt"
+          }
+        },
+        {
+          "id": "prepend",
+          "label": "s4",
+          "config": { "prefix": "[旧] " }
         }
       ]
     },
@@ -201,9 +185,9 @@
       "id": "simple_prefix",
       "enabled": true,
       "priority": 5,
-      "steps": [
+      "pipeline": [
         {
-          "id": "match_block",
+          "id": "match",
           "config": {
             "matcher": {
               "type": "simple",
@@ -211,13 +195,17 @@
               "value": "/echo ",
               "ignore_case": false
             },
-            "region": { "kind": "match" },
-            "steps": [
-              { "id": "replace", "config": { "from": "/echo ", "to": "ECHO:" } }
-            ]
+            "region": { "kind": "match" }
           }
-        }
+        },
+        { "id": "replace", "config": { "from": "/echo ", "to": "ECHO:" } }
       ]
+    },
+    {
+      "id": "simple_prepend_no_match",
+      "enabled": false,
+      "priority": 1,
+      "pipeline": [{ "id": "prepend", "config": { "prefix": "[tag] " } }]
     }
   ]
 }

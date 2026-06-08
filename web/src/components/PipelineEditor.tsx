@@ -24,7 +24,7 @@ import {
   UI,
   moduleLabel,
 } from "../i18n-ui";
-import type { PipelineStepUI } from "../types";
+import type { PipelineStepUI, WindowAnchor } from "../types";
 import { newKey, normalizePipelineLabels } from "../types";
 
 const MODULE_VALUES = new Set(MODULE_OPTIONS.map((o) => o.value));
@@ -32,9 +32,13 @@ const MODULE_VALUES = new Set(MODULE_OPTIONS.map((o) => o.value));
 const GUARD_OUTCOMES = [
   { value: "pass", label: UI.guardOutcomePass },
   { value: "block", label: UI.guardOutcomeBlock },
-  { value: "stop_rule", label: UI.guardOutcomeStopRule },
+  { value: "halt", label: UI.guardOutcomeHalt },
   { value: "goto", label: UI.guardOutcomeGoto },
 ] as const;
+
+function emptyAnchor(): WindowAnchor {
+  return { literal: "", occurrence: 0, inclusive: false };
+}
 
 function pipelineGotoLabels(pipeline: PipelineStepUI[], excludeKey: string): string[] {
   const seen = new Set<string>();
@@ -81,7 +85,6 @@ function parseGuardOp(op: string): { kind: GuardKind; numberCmp: GuardNumberCmp;
 function guardDefaults(op: string): Record<string, unknown> {
   const base = {
     op,
-    in: "region",
     when_true: "pass",
     when_false: "pass",
   };
@@ -117,9 +120,257 @@ export function defaultConfig(mid: string): Record<string, unknown> {
         when_true: "block",
         when_false: "pass",
       };
+    case "match":
+      return {
+        matcher: { type: "passthrough" },
+        region: { kind: "match" },
+      };
     default:
       return {};
   }
+}
+
+function AnchorFields({
+  label,
+  value,
+  onChange,
+  ignoreSameLine,
+  onIgnoreSameLineChange,
+  ignoreSameLineLabel,
+}: {
+  label: string;
+  value: WindowAnchor;
+  onChange: (a: WindowAnchor) => void;
+  ignoreSameLine: boolean;
+  onIgnoreSameLineChange: (v: boolean) => void;
+  ignoreSameLineLabel: string;
+}) {
+  return (
+    <div className="anchor-block">
+      <h3>{label}</h3>
+      <label className="field-stack field-stack--block">
+        <span className="label-text">{UI.fieldLiteral}</span>
+        <input value={value.literal} onChange={(e) => onChange({ ...value, literal: e.target.value })} />
+      </label>
+      <div className="anchor-row-secondary">
+        <label className="field-stack field-stack--occurrence">
+          <span className="label-text">{UI.fieldOccurrence}</span>
+          <input
+            type="number"
+            value={value.occurrence}
+            onChange={(e) => onChange({ ...value, occurrence: Number(e.target.value) || 0 })}
+          />
+        </label>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label className="field-inline-check field-inline-check--solo">
+            <input
+              type="checkbox"
+              checked={value.inclusive}
+              onChange={(e) => onChange({ ...value, inclusive: e.target.checked })}
+            />
+            <span>{UI.fieldInclusive}</span>
+          </label>
+          <label className="field-inline-check field-inline-check--solo">
+            <input
+              type="checkbox"
+              checked={ignoreSameLine}
+              onChange={(e) => onIgnoreSameLineChange(e.target.checked)}
+            />
+            <span>{ignoreSameLineLabel}</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MatchConfigFields({
+  config,
+  set,
+}: {
+  config: Record<string, unknown>;
+  set: (patch: Record<string, unknown>) => void;
+}) {
+  const matcher = (config.matcher as Record<string, unknown> | undefined) ?? { type: "passthrough" };
+  const region = (config.region as { kind: string; index?: number; name?: string } | undefined) ?? {
+    kind: "match",
+  };
+
+  const setMatcher = (m: Record<string, unknown>) => set({ matcher: m });
+  const setRegion = (r: { kind: string; index?: number; name?: string }) => set({ region: r });
+
+  const mtype = String(matcher.type ?? "regex");
+
+  const matcherTypeSelect = (
+    <label className="field-stack field-stack--block">
+      <span className="label-text">{UI.matcherType}</span>
+      <select
+        value={mtype}
+        onChange={(e) => {
+          const t = e.target.value;
+          if (t === "regex") {
+            setMatcher({ type: "regex", pattern: ".*", flags: [] });
+          } else if (t === "simple") {
+            setMatcher({ type: "simple", op: "contains", value: "", ignore_case: false });
+          } else if (t === "anchor_slice") {
+            setMatcher({
+              type: "anchor_slice",
+              start: emptyAnchor(),
+              end: emptyAnchor(),
+              ignore_anchor_line: false,
+              ignore_start_anchor_line: false,
+              ignore_end_anchor_line: false,
+            });
+          } else {
+            setMatcher({ type: "passthrough" });
+          }
+        }}
+      >
+        <option value="regex">{UI.matcherRegex}</option>
+        <option value="simple">{UI.matcherSimple}</option>
+        <option value="passthrough">{UI.matcherPassthrough}</option>
+        <option value="anchor_slice">{UI.matcherAnchorSlice}</option>
+      </select>
+    </label>
+  );
+
+  return (
+    <div className="step-body step-body--match">
+      {mtype === "anchor_slice" ? (
+        <div className="match-anchor-matcher">
+          <div className="match-matcher-head">{matcherTypeSelect}</div>
+          <p className="match-field-hint">{UI.matcherAnchorSliceHint}</p>
+          <div className="window-grid">
+            <AnchorFields
+              label={UI.anchorStart}
+              value={(matcher.start as WindowAnchor | undefined) ?? emptyAnchor()}
+              onChange={(start) => setMatcher({ ...matcher, start })}
+              ignoreSameLine={Boolean(matcher.ignore_start_anchor_line)}
+              onIgnoreSameLineChange={(v) => setMatcher({ ...matcher, ignore_start_anchor_line: v })}
+              ignoreSameLineLabel={UI.anchorIgnoreSameLine}
+            />
+            <AnchorFields
+              label={UI.anchorEnd}
+              value={(matcher.end as WindowAnchor | undefined) ?? emptyAnchor()}
+              onChange={(end) => setMatcher({ ...matcher, end })}
+              ignoreSameLine={Boolean(matcher.ignore_end_anchor_line)}
+              onIgnoreSameLineChange={(v) => setMatcher({ ...matcher, ignore_end_anchor_line: v })}
+              ignoreSameLineLabel={UI.anchorIgnoreSameLine}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="match-matcher-head">{matcherTypeSelect}</div>
+      )}
+      {mtype === "regex" ? (
+        <div className="form-grid-regex">
+          <label className="field-stack span-cols-2">
+            <span className="label-text">{UI.fieldPattern}</span>
+            <input
+              value={String(matcher.pattern ?? "")}
+              onChange={(e) => setMatcher({ ...matcher, pattern: e.target.value })}
+            />
+          </label>
+          <label className="field-stack span-cols-2">
+            <span className="label-text">{UI.fieldFlags}</span>
+            <input
+              placeholder="例如：IGNORECASE, MULTILINE, DOTALL"
+              value={((matcher.flags as string[] | undefined) ?? []).join(", ")}
+              onChange={(e) => {
+                const flags = e.target.value
+                  .split(/[,，]/)
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                setMatcher({ ...matcher, flags });
+              }}
+            />
+          </label>
+        </div>
+      ) : null}
+      {mtype === "simple" ? (
+        <div className="form-grid-matcher-simple">
+          <label className="field-stack">
+            <span className="label-text">{UI.fieldOp}</span>
+            <select
+              value={String(matcher.op ?? "contains")}
+              onChange={(e) => setMatcher({ ...matcher, op: e.target.value })}
+            >
+              <option value="equals">{UI.opEquals}</option>
+              <option value="contains">{UI.opContains}</option>
+              <option value="not_contains">{UI.opNotContains}</option>
+              <option value="startswith">{UI.opStarts}</option>
+              <option value="endswith">{UI.opEnds}</option>
+            </select>
+          </label>
+          <label className="field-stack">
+            <span className="label-text">{UI.fieldValue}</span>
+            <input
+              value={String(matcher.value ?? "")}
+              onChange={(e) => setMatcher({ ...matcher, value: e.target.value })}
+            />
+          </label>
+          <label className="field-inline-check field-inline-check--align-input">
+            <input
+              type="checkbox"
+              checked={Boolean(matcher.ignore_case)}
+              onChange={(e) => setMatcher({ ...matcher, ignore_case: e.target.checked })}
+            />
+            <span>{UI.fieldIgnoreCase}</span>
+          </label>
+        </div>
+      ) : null}
+
+      <div className="form-grid-region step-match-region">
+        <label className="field-stack">
+          <span className="label-text">{UI.fieldRegionKind}</span>
+          <select
+            value={String(region.kind ?? "match")}
+            onChange={(e) => {
+              const k = e.target.value;
+              if (k === "group") {
+                setRegion({
+                  kind: "group",
+                  index: region.kind === "group" ? region.index ?? 1 : 1,
+                  name: region.kind === "group" ? region.name : "",
+                });
+              } else {
+                setRegion({ kind: "match" });
+              }
+            }}
+          >
+            <option value="match">{UI.regionMatch}</option>
+            <option value="group">{UI.regionGroup}</option>
+          </select>
+        </label>
+        {region.kind === "group" ? (
+          <>
+            <label className="field-stack">
+              <span className="label-text">{UI.fieldGroupIndex}</span>
+              <input
+                type="number"
+                value={region.index ?? 0}
+                onChange={(e) =>
+                  setRegion({
+                    ...region,
+                    kind: "group",
+                    index: Number(e.target.value) || 0,
+                  })
+                }
+              />
+            </label>
+            <label className="field-stack">
+              <span className="label-text">{UI.fieldGroupName}</span>
+              <input
+                value={String(region.name ?? "")}
+                onChange={(e) => setRegion({ ...region, kind: "group", name: e.target.value })}
+              />
+            </label>
+          </>
+        ) : null}
+      </div>
+      <p className="muted pipeline-config-hint">{UI.matchStepHint}</p>
+    </div>
+  );
 }
 
 function SortableRow({
@@ -333,6 +584,8 @@ function ModuleConfigFields({
           stepKey={step._key}
         />
       );
+    case "match":
+      return <MatchConfigFields config={c} set={set} />;
     default:
       return <p className="muted">{UI.cfgNone}</p>;
   }
@@ -410,16 +663,6 @@ function GuardConfigFields({
   const isAnchorDate = isDate && (dateOp === "date_before_at" || dateOp === "date_after_at");
 
   const gotoLabels = pipelineGotoLabels(pipeline, stepKey);
-
-  const inSelect = (
-    <label className="field-stack">
-      <span className="label-text">{UI.fieldRegionKind}</span>
-      <select value={String(c.in ?? "region")} onChange={(e) => set({ in: e.target.value })}>
-        <option value="region">{UI.guardCondInRegion}</option>
-        <option value="message">{UI.guardCondInMessage}</option>
-      </select>
-    </label>
-  );
 
   return (
     <div className="field-stack field-stack--block">
@@ -518,7 +761,6 @@ function GuardConfigFields({
               onChange={(e) => set({ regex: e.target.value })}
             />
           </label>
-          {inSelect}
           <label className="field-inline-check">
             <input
               type="checkbox"
@@ -548,7 +790,6 @@ function GuardConfigFields({
               onChange={(e) => set({ regex: e.target.value })}
             />
           </label>
-          {inSelect}
           <label className="field-inline-check">
             <input
               type="checkbox"

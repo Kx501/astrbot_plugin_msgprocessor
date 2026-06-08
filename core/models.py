@@ -40,9 +40,9 @@ class ModuleResult:
     text: str
     # 为 True 时拦截本条待发消息（不发送）
     drop: bool = False
-    # 为 True 时终止所在规则的后续步骤（不拦截发送）
-    end_rule: bool = False
-    # 非空时跳转到同 match_block 内层步骤 label（顺序继续执行）
+    # 为 True 时终止本条规则的后续 pipeline 步骤（不拦截发送）
+    halt: bool = False
+    # 非空时跳转到同段 pipeline 内步骤 label
     goto: str | None = None
     # 非空时表示将命中段拆为多条消息；text 为拆分后首段（供未感知拆分的调用方回退）
     split_parts: list[str] | None = None

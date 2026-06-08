@@ -68,7 +68,7 @@ export const UI = {
   fieldPattern: "正则模式",
   fieldFlags: "标志（逗号分隔）",
 
-  fieldRegionKind: "对哪一段文本执行内层模块",
+  fieldRegionKind: "作用域（match 步骤）",
   regionMatch: "整段匹配结果",
   regionGroup: "正则捕获组",
   fieldGroupIndex: "捕获组序号",
@@ -83,16 +83,17 @@ export const UI = {
   moduleAppend: "后方拼接",
   moduleSplit: "标记分割",
   moduleGuard: "条件守卫",
+  moduleMatch: "定位匹配",
 
   guardWhenTrue: "条件成立时",
   guardWhenFalse: "条件不成立时",
-  guardOutcomePass: "不做处理（继续后续模块）",
+  guardOutcomePass: "不做处理（继续后续步骤）",
   guardOutcomeBlock: "拦截发送",
-  guardOutcomeStopRule: "终止本条规则后续步骤",
+  guardOutcomeHalt: "终止本条规则后续步骤",
   guardOutcomeGoto: "跳转到指定步骤",
   guardGotoTarget: "跳转目标",
   guardGotoUnset: "请选择步骤标识",
-  guardGotoHint: "跳转仅在本匹配块的内层步骤间生效；步骤标识按顺序自动生成为 s1、s2…",
+  guardGotoHint: "跳转仅在本 match 段内的后续步骤间生效；步骤标识按顺序自动生成为 s1、s2…",
   guardCondKindType: "类型",
   guardCondCmp: "比较方式",
   guardCondKindDate: "日期",
@@ -118,7 +119,9 @@ export const UI = {
   guardCondIfNoDate: "未找到日期时视为成立",
   guardCondIfMissing: "未找到数值时视为成立",
   guardHint:
-    "每条 guard 一种运算（日期 / 数值比大小）。文本筛选请用 matcher；组合逻辑请串联多个 guard 或使用 goto 分支。",
+    "每条 guard 一种运算（日期 / 数值比大小）。文本筛选请用 match 步骤；组合逻辑请串联多个 guard 或使用 goto 分支。",
+  matchStepHint:
+    "定位命中段并设定作用域；未命中则跳过直至下一个 match 步骤。无 match 时后续步骤作用于整段消息。",
 
   stepLabelField: "步骤标识",
   stepLabelAuto: (label: string) => label,
@@ -150,17 +153,9 @@ export const UI = {
 
   dragSort: "拖动排序",
 
-  sectionSteps: "规则步骤（有序执行）",
-  stepsHint:
-    "各模块自上而下执行：零命中或执行失败则跳过该块。结束步骤可提前结束本条规则。",
-  stepTypeLabel: "步骤类型",
-  stepMatchBlock: "匹配块（主匹配 + 内层处理）",
-  stepEndRule: "结束本条规则",
-  matchBlockHint:
-    "本块输入为当前整段文本；命中后写回。多块串联时，前一块输出为下一块输入。",
-  matchBlockInnerPipeline: "命中后的处理模块",
-  addStep: "添加步骤",
-  endRuleDesc: "执行到此步时停止处理本条规则中后续步骤（不改变已写入的消息）。",
+  sectionPipeline: "处理流水线（有序执行）",
+  pipelineHint:
+    "自上而下执行：match 设定作用域；未命中则跳过直至下一个 match。无 match 时步骤作用于整段消息。",
 
   themeSystem: "跟随系统",
   themeLight: "浅色",
@@ -195,6 +190,7 @@ export const GUARD_CMP_BY_KIND: Record<string, { value: string; label: string }[
 };
 
 export const MODULE_OPTIONS: { value: string; label: string }[] = [
+  { value: "match", label: UI.moduleMatch },
   { value: "noop", label: UI.moduleNoop },
   { value: "replace", label: UI.moduleReplace },
   { value: "delete", label: UI.moduleDelete },
@@ -205,15 +201,6 @@ export const MODULE_OPTIONS: { value: string; label: string }[] = [
   { value: "guard", label: UI.moduleGuard },
 ];
 
-export const STEP_OPTIONS: { value: string; label: string }[] = [
-  { value: "match_block", label: UI.stepMatchBlock },
-  { value: "end_rule", label: UI.stepEndRule },
-];
-
 export function moduleLabel(id: string): string {
   return MODULE_OPTIONS.find((o) => o.value === id)?.label ?? id;
-}
-
-export function stepLabel(id: string): string {
-  return STEP_OPTIONS.find((o) => o.value === id)?.label ?? id;
 }
