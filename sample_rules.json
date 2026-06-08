@@ -8,7 +8,7 @@
       "limits": { "max_matches": 8 },
       "pipeline": [
         {
-          "id": "match",
+          "id": "locate",
           "config": {
             "matcher": {
               "type": "anchor_slice",
@@ -23,34 +23,16 @@
       ]
     },
     {
-      "id": "whole_message_passthrough",
+      "id": "whole_message_prepend",
       "enabled": false,
       "priority": 8,
-      "limits": { "max_matches": 1 },
-      "pipeline": [
-        {
-          "id": "match",
-          "config": {
-            "matcher": { "type": "passthrough" },
-            "region": { "kind": "match" }
-          }
-        },
-        { "id": "prepend", "config": { "prefix": "[整段]" } }
-      ]
+      "pipeline": [{ "id": "prepend", "config": { "prefix": "[整段]" } }]
     },
     {
       "id": "llm_split_by_marker",
       "enabled": false,
       "priority": 9,
-      "limits": { "max_matches": 1 },
       "pipeline": [
-        {
-          "id": "match",
-          "config": {
-            "matcher": { "type": "passthrough" },
-            "region": { "kind": "match" }
-          }
-        },
         { "id": "split", "config": { "marker": "---", "delete_marker": true } }
       ]
     },
@@ -58,15 +40,7 @@
       "id": "block_stale_news",
       "enabled": false,
       "priority": 12,
-      "limits": { "max_matches": 1 },
       "pipeline": [
-        {
-          "id": "match",
-          "config": {
-            "matcher": { "type": "passthrough" },
-            "region": { "kind": "match" }
-          }
-        },
         {
           "id": "guard",
           "config": {
@@ -85,7 +59,7 @@
       "limits": { "max_matches": 1 },
       "pipeline": [
         {
-          "id": "match",
+          "id": "locate",
           "config": {
             "matcher": {
               "type": "regex",
@@ -113,7 +87,7 @@
       "limits": { "max_matches": 1 },
       "pipeline": [
         {
-          "id": "match",
+          "id": "locate",
           "config": {
             "matcher": {
               "type": "regex",
@@ -137,15 +111,7 @@
       "id": "goto_date_branch",
       "enabled": false,
       "priority": 11,
-      "limits": { "max_matches": 1 },
       "pipeline": [
-        {
-          "id": "match",
-          "config": {
-            "matcher": { "type": "passthrough" },
-            "region": { "kind": "match" }
-          }
-        },
         {
           "id": "guard",
           "label": "s1",
@@ -187,7 +153,7 @@
       "priority": 5,
       "pipeline": [
         {
-          "id": "match",
+          "id": "locate",
           "config": {
             "matcher": {
               "type": "simple",
@@ -202,10 +168,68 @@
       ]
     },
     {
-      "id": "simple_prepend_no_match",
+      "id": "simple_prepend_whole_message",
       "enabled": false,
       "priority": 1,
       "pipeline": [{ "id": "prepend", "config": { "prefix": "[tag] " } }]
+    },
+    {
+      "id": "block_unresolved_placeholder",
+      "enabled": false,
+      "priority": 15,
+      "pipeline": [
+        {
+          "id": "placeholder_block",
+          "config": {
+            "presets": ["bracket", "mustache"],
+            "custom_patterns": [],
+            "include_empty": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "replace_placeholder_fallback",
+      "enabled": false,
+      "priority": 6,
+      "pipeline": [
+        {
+          "id": "placeholder_replace",
+          "config": {
+            "presets": ["bracket", "mustache"],
+            "custom_patterns": [],
+            "include_empty": false,
+            "replacement": "（待填）"
+          }
+        }
+      ]
+    },
+    {
+      "id": "strip_placeholder_in_brackets",
+      "enabled": false,
+      "priority": 7,
+      "limits": { "max_matches": 8 },
+      "pipeline": [
+        {
+          "id": "locate",
+          "config": {
+            "matcher": {
+              "type": "anchor_slice",
+              "start": { "literal": "【", "occurrence": 0, "inclusive": false },
+              "end": { "literal": "】", "occurrence": 0, "inclusive": false }
+            },
+            "region": { "kind": "match" }
+          }
+        },
+        {
+          "id": "placeholder_delete",
+          "config": {
+            "presets": ["bracket", "mustache"],
+            "custom_patterns": [],
+            "include_empty": true
+          }
+        }
+      ]
     }
   ]
 }

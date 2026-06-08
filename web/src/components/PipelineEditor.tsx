@@ -20,7 +20,9 @@ import {
   GUARD_CMP_BY_KIND,
   GUARD_DATE_OP_OPTIONS,
   GUARD_KIND_OPTIONS,
+  MODULE_GROUPS,
   MODULE_OPTIONS,
+  PLACEHOLDER_PRESET_OPTIONS,
   UI,
   moduleLabel,
 } from "../i18n-ui";
@@ -38,6 +40,23 @@ const GUARD_OUTCOMES = [
 
 function emptyAnchor(): WindowAnchor {
   return { literal: "", occurrence: 0, inclusive: false };
+}
+
+const DEFAULT_PLACEHOLDER_PRESETS = ["bracket", "mustache"];
+
+function defaultPlaceholderConfig(): Record<string, unknown> {
+  return {
+    presets: [...DEFAULT_PLACEHOLDER_PRESETS],
+    custom_patterns: [],
+    include_empty: true,
+  };
+}
+
+function placeholderMatcherConfig(): Record<string, unknown> {
+  return {
+    type: "placeholder",
+    ...defaultPlaceholderConfig(),
+  };
 }
 
 function pipelineGotoLabels(pipeline: PipelineStepUI[], excludeKey: string): string[] {
@@ -120,14 +139,104 @@ export function defaultConfig(mid: string): Record<string, unknown> {
         when_true: "block",
         when_false: "pass",
       };
-    case "match":
+    case "locate":
       return {
-        matcher: { type: "passthrough" },
+        matcher: { type: "simple", op: "contains", value: "", ignore_case: false },
         region: { kind: "match" },
       };
+    case "placeholder_block":
+    case "placeholder_delete":
+      return defaultPlaceholderConfig();
+    case "placeholder_replace":
+      return { ...defaultPlaceholderConfig(), replacement: "" };
     default:
       return {};
   }
+}
+
+function parseCustomPatterns(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((s) => String(s).trim()).filter(Boolean);
+  }
+  if (typeof raw === "string") {
+    return raw
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function PlaceholderConfigFields({
+  c,
+  set,
+  showReplacement = false,
+}: {
+  c: Record<string, unknown>;
+  set: (patch: Record<string, unknown>) => void;
+  showReplacement?: boolean;
+}) {
+  const presets = Array.isArray(c.presets)
+    ? (c.presets as string[]).map((s) => String(s))
+    : [...DEFAULT_PLACEHOLDER_PRESETS];
+  const customText = parseCustomPatterns(c.custom_patterns).join("\n");
+
+  const togglePreset = (value: string, checked: boolean) => {
+    const next = new Set(presets);
+    if (checked) {
+      next.add(value);
+    } else {
+      next.delete(value);
+    }
+    const ordered = PLACEHOLDER_PRESET_OPTIONS.map((o) => o.value).filter((v) => next.has(v));
+    set({ presets: ordered.length > 0 ? ordered : [...DEFAULT_PLACEHOLDER_PRESETS] });
+  };
+
+  return (
+    <div className="field-stack field-stack--block">
+      <div className="field-stack">
+        <span className="label-text">{UI.cfgPlaceholderPresets}</span>
+        <div className="pipeline-check-row">
+          {PLACEHOLDER_PRESET_OPTIONS.map((o) => (
+            <label key={o.value} className="field-inline-check">
+              <input
+                type="checkbox"
+                checked={presets.includes(o.value)}
+                onChange={(e) => togglePreset(o.value, e.target.checked)}
+              />
+              <span>{o.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+      <label className="field-stack field-stack--block">
+        <span className="label-text">{UI.cfgPlaceholderCustomPatterns}</span>
+        <textarea
+          rows={3}
+          value={customText}
+          onChange={(e) => set({ custom_patterns: parseCustomPatterns(e.target.value) })}
+        />
+      </label>
+      <label className="field-inline-check">
+        <input
+          type="checkbox"
+          checked={Boolean(c.include_empty ?? true)}
+          onChange={(e) => set({ include_empty: e.target.checked })}
+        />
+        <span>{UI.cfgPlaceholderIncludeEmpty}</span>
+      </label>
+      {showReplacement ? (
+        <label className="field-stack field-stack--block">
+          <span className="label-text">{UI.cfgPlaceholderReplacement}</span>
+          <input
+            value={String(c.replacement ?? "")}
+            onChange={(e) => set({ replacement: e.target.value })}
+          />
+        </label>
+      ) : null}
+      <p className="muted pipeline-config-hint">{UI.cfgPlaceholderHint}</p>
+    </div>
+  );
 }
 
 function AnchorFields({
@@ -184,14 +293,19 @@ function AnchorFields({
   );
 }
 
-function MatchConfigFields({
+function LocateConfigFields({
   config,
   set,
 }: {
   config: Record<string, unknown>;
   set: (patch: Record<string, unknown>) => void;
 }) {
-  const matcher = (config.matcher as Record<string, unknown> | undefined) ?? { type: "passthrough" };
+  const matcher = (config.matcher as Record<string, unknown> | undefined) ?? {
+    type: "simple",
+    op: "contains",
+    value: "",
+    ignore_case: false,
+  };
   const region = (config.region as { kind: string; index?: number; name?: string } | undefined) ?? {
     kind: "match",
   };
@@ -201,15 +315,15 @@ function MatchConfigFields({
 
   const mtype = String(matcher.type ?? "regex");
 
-  const matcherTypeSelect = (
+  const locateTypeSelect = (
     <label className="field-stack field-stack--block">
-      <span className="label-text">{UI.matcherType}</span>
+      <span className="label-text">{UI.locateType}</span>
       <select
         value={mtype}
         onChange={(e) => {
           const t = e.target.value;
           if (t === "regex") {
-            setMatcher({ type: "regex", pattern: ".*", flags: [] });
+            setMatcher({ type: "regex", pattern: "", flags: [] });
           } else if (t === "simple") {
             setMatcher({ type: "simple", op: "contains", value: "", ignore_case: false });
           } else if (t === "anchor_slice") {
@@ -221,15 +335,15 @@ function MatchConfigFields({
               ignore_start_anchor_line: false,
               ignore_end_anchor_line: false,
             });
-          } else {
-            setMatcher({ type: "passthrough" });
+          } else if (t === "placeholder") {
+            setMatcher(placeholderMatcherConfig());
           }
         }}
       >
-        <option value="regex">{UI.matcherRegex}</option>
-        <option value="simple">{UI.matcherSimple}</option>
-        <option value="passthrough">{UI.matcherPassthrough}</option>
-        <option value="anchor_slice">{UI.matcherAnchorSlice}</option>
+        <option value="regex">{UI.locateRegex}</option>
+        <option value="simple">{UI.locateSimple}</option>
+        <option value="placeholder">{UI.locatePlaceholder}</option>
+        <option value="anchor_slice">{UI.locateAnchorSlice}</option>
       </select>
     </label>
   );
@@ -238,8 +352,8 @@ function MatchConfigFields({
     <div className="step-body step-body--match">
       {mtype === "anchor_slice" ? (
         <div className="match-anchor-matcher">
-          <div className="match-matcher-head">{matcherTypeSelect}</div>
-          <p className="match-field-hint">{UI.matcherAnchorSliceHint}</p>
+          <div className="match-matcher-head">{locateTypeSelect}</div>
+          <p className="match-field-hint">{UI.locateAnchorSliceHint}</p>
           <div className="window-grid">
             <AnchorFields
               label={UI.anchorStart}
@@ -260,7 +374,7 @@ function MatchConfigFields({
           </div>
         </div>
       ) : (
-        <div className="match-matcher-head">{matcherTypeSelect}</div>
+        <div className="match-matcher-head">{locateTypeSelect}</div>
       )}
       {mtype === "regex" ? (
         <div className="form-grid-regex">
@@ -319,6 +433,15 @@ function MatchConfigFields({
           </label>
         </div>
       ) : null}
+      {mtype === "placeholder" ? (
+        <>
+          <PlaceholderConfigFields
+            c={matcher}
+            set={(patch) => setMatcher({ ...matcher, ...patch })}
+          />
+          <p className="muted pipeline-config-hint">{UI.cfgPlaceholderLocateHint}</p>
+        </>
+      ) : null}
 
       <div className="form-grid-region step-match-region">
         <label className="field-stack">
@@ -368,7 +491,7 @@ function MatchConfigFields({
           </>
         ) : null}
       </div>
-      <p className="muted pipeline-config-hint">{UI.matchStepHint}</p>
+      <p className="muted pipeline-config-hint">{UI.locateStepHint}</p>
     </div>
   );
 }
@@ -411,7 +534,16 @@ function SortableRow({
             {typeof step.id === "string" && !MODULE_VALUES.has(step.id) && (
               <option value={step.id}>{moduleLabel(step.id)}</option>
             )}
-            {MODULE_OPTIONS.map((o) => (
+            {MODULE_GROUPS.map((g) => (
+              <optgroup key={g.id} label={g.label}>
+                {MODULE_OPTIONS.filter((o) => o.group === g.id).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+            {MODULE_OPTIONS.filter((o) => !o.group).map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -584,8 +716,13 @@ function ModuleConfigFields({
           stepKey={step._key}
         />
       );
-    case "match":
-      return <MatchConfigFields config={c} set={set} />;
+    case "locate":
+      return <LocateConfigFields config={c} set={set} />;
+    case "placeholder_block":
+    case "placeholder_delete":
+      return <PlaceholderConfigFields c={c} set={set} />;
+    case "placeholder_replace":
+      return <PlaceholderConfigFields c={c} set={set} showReplacement />;
     default:
       return <p className="muted">{UI.cfgNone}</p>;
   }

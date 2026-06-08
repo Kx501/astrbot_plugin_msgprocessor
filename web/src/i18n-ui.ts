@@ -50,13 +50,13 @@ export const UI = {
   fieldInclusive: "截取范围包含锚点",
   anchorIgnoreSameLine: "忽略与锚点同行的文本",
 
-  matcherType: "匹配方式",
-  matcherRegex: "正则表达式",
-  matcherSimple: "简单匹配",
-  matcherPassthrough: "整段直通",
-  matcherAnchorSlice: "锚点区间",
-  matcherAnchorSliceHint:
-    "取开始、结束锚点之间的整段为一次命中；解析失败则跳过本块。",
+  locateType: "定位方式",
+  locateRegex: "正则区间",
+  locateSimple: "简单条件",
+  locatePlaceholder: "按占位符分段",
+  locateAnchorSlice: "锚点区间",
+  locateAnchorSliceHint:
+    "取开始、结束锚点之间的内容为工作区；解析失败则跳过直至下一个划定作用域步骤。",
   fieldOp: "比较方式",
   opEquals: "完全相等",
   opContains: "包含",
@@ -68,8 +68,8 @@ export const UI = {
   fieldPattern: "正则模式",
   fieldFlags: "标志（逗号分隔）",
 
-  fieldRegionKind: "作用域（match 步骤）",
-  regionMatch: "整段匹配结果",
+  fieldRegionKind: "工作区范围",
+  regionMatch: "定位到的整段",
   regionGroup: "正则捕获组",
   fieldGroupIndex: "捕获组序号",
   fieldGroupName: "命名组（可选，留空则用序号）",
@@ -83,7 +83,12 @@ export const UI = {
   moduleAppend: "后方拼接",
   moduleSplit: "标记分割",
   moduleGuard: "条件守卫",
-  moduleMatch: "定位匹配",
+  moduleLocate: "划定作用域",
+  moduleGroupGeneral: "通用",
+  moduleGroupPlaceholder: "占位符",
+  modulePlaceholderBlock: "占位符拦截",
+  modulePlaceholderDelete: "占位符删除",
+  modulePlaceholderReplace: "占位符替换",
 
   guardWhenTrue: "条件成立时",
   guardWhenFalse: "条件不成立时",
@@ -93,7 +98,8 @@ export const UI = {
   guardOutcomeGoto: "跳转到指定步骤",
   guardGotoTarget: "跳转目标",
   guardGotoUnset: "请选择步骤标识",
-  guardGotoHint: "跳转仅在本 match 段内的后续步骤间生效；步骤标识按顺序自动生成为 s1、s2…",
+  guardGotoHint:
+    "跳转仅在相邻两个「划定作用域」之间的步骤段内生效；步骤标识按顺序自动生成为 s1、s2…",
   guardCondKindType: "类型",
   guardCondCmp: "比较方式",
   guardCondKindDate: "日期",
@@ -119,9 +125,9 @@ export const UI = {
   guardCondIfNoDate: "未找到日期时视为成立",
   guardCondIfMissing: "未找到数值时视为成立",
   guardHint:
-    "每条 guard 一种运算（日期 / 数值比大小）。文本筛选请用 match 步骤；组合逻辑请串联多个 guard 或使用 goto 分支。",
-  matchStepHint:
-    "定位命中段并设定作用域；未命中则跳过直至下一个 match 步骤。无 match 时后续步骤作用于整段消息。",
+    "每条 guard 一种运算（日期 / 数值比大小）。需先圈定文本范围时用「划定作用域」；组合逻辑可串联 guard 或 goto。",
+  locateStepHint:
+    "仅在需要局部处理时出现。划定消息中的工作区；未命中则跳过直至下一步「划定作用域」。无此步骤时，后续模块作用于整段消息。",
 
   stepLabelField: "步骤标识",
   stepLabelAuto: (label: string) => label,
@@ -130,7 +136,7 @@ export const UI = {
   cfgTo: "替换为",
   cfgDeleteFrom: "要删除的原文（全部匹配）",
   cfgWholeFromEmpty: "为空时处理整段",
-  cfgReplaceRegex: "正则替换",
+  cfgReplaceRegex: "在作用域内按正则替换",
   cfgRegexFlags: "正则标志（逗号分隔）",
   cfgPrefix: "前方拼接内容",
   cfgText: "后方拼接内容",
@@ -145,6 +151,19 @@ export const UI = {
   cfgSplitHint:
     "将命中段按标记拆为多条消息。段首换行作用于首段之后（标记后的换行）；段尾换行作用于尾段之前（标记前的换行）；整条消息末尾换行会保留。支持转义：\\n、\\t、\\\\。",
   cfgNone: "此模块无额外参数",
+  cfgPlaceholderPresets: "内置预设",
+  cfgPlaceholderPresetBracket: "方括号 […]",
+  cfgPlaceholderPresetMustache: "双花括号 {{…}}",
+  cfgPlaceholderPresetPercent: "百分号 %…%",
+  cfgPlaceholderPresetDollar: "美元符 ${…}",
+  cfgPlaceholderPresetCurly: "花括号标识符 {name}",
+  cfgPlaceholderCustomPatterns: "自定义正则（每行一条）",
+  cfgPlaceholderIncludeEmpty: "包含空占位符（如 []、{{}}）",
+  cfgPlaceholderReplacement: "替换为",
+  cfgPlaceholderHint:
+    "对当前作用域文本扫描占位符；多个模块共用同一套预设与自定义正则。拦截模块发现占位符即不发送。",
+  cfgPlaceholderLocateHint:
+    "每个占位符区间为一段工作区，便于后续步骤只处理占位符片段。",
 
   moduleLabel: "模块类型",
   addModule: "添加处理步骤",
@@ -155,7 +174,7 @@ export const UI = {
 
   sectionPipeline: "处理流水线（有序执行）",
   pipelineHint:
-    "自上而下执行：match 设定作用域；未命中则跳过直至下一个 match。无 match 时步骤作用于整段消息。",
+    "自上而下执行。仅当需局部处理时添加「划定作用域」；否则步骤直接作用于整段消息。",
 
   themeSystem: "跟随系统",
   themeLight: "浅色",
@@ -189,16 +208,34 @@ export const GUARD_CMP_BY_KIND: Record<string, { value: string; label: string }[
   number: GUARD_CMP_COMMON,
 };
 
-export const MODULE_OPTIONS: { value: string; label: string }[] = [
-  { value: "match", label: UI.moduleMatch },
-  { value: "noop", label: UI.moduleNoop },
-  { value: "replace", label: UI.moduleReplace },
-  { value: "delete", label: UI.moduleDelete },
-  { value: "translate_llm", label: UI.moduleTranslateLlm },
-  { value: "prepend", label: UI.modulePrepend },
-  { value: "append", label: UI.moduleAppend },
-  { value: "split", label: UI.moduleSplit },
-  { value: "guard", label: UI.moduleGuard },
+export const PLACEHOLDER_PRESET_OPTIONS: { value: string; label: string }[] = [
+  { value: "bracket", label: UI.cfgPlaceholderPresetBracket },
+  { value: "mustache", label: UI.cfgPlaceholderPresetMustache },
+  { value: "percent", label: UI.cfgPlaceholderPresetPercent },
+  { value: "dollar", label: UI.cfgPlaceholderPresetDollar },
+  { value: "curly", label: UI.cfgPlaceholderPresetCurly },
+];
+
+export type ModuleOption = { value: string; label: string; group?: string };
+
+export const MODULE_OPTIONS: ModuleOption[] = [
+  { value: "locate", label: UI.moduleLocate, group: "general" },
+  { value: "noop", label: UI.moduleNoop, group: "general" },
+  { value: "replace", label: UI.moduleReplace, group: "general" },
+  { value: "delete", label: UI.moduleDelete, group: "general" },
+  { value: "translate_llm", label: UI.moduleTranslateLlm, group: "general" },
+  { value: "prepend", label: UI.modulePrepend, group: "general" },
+  { value: "append", label: UI.moduleAppend, group: "general" },
+  { value: "split", label: UI.moduleSplit, group: "general" },
+  { value: "guard", label: UI.moduleGuard, group: "general" },
+  { value: "placeholder_block", label: UI.modulePlaceholderBlock, group: "placeholder" },
+  { value: "placeholder_delete", label: UI.modulePlaceholderDelete, group: "placeholder" },
+  { value: "placeholder_replace", label: UI.modulePlaceholderReplace, group: "placeholder" },
+];
+
+export const MODULE_GROUPS: { id: string; label: string }[] = [
+  { id: "general", label: UI.moduleGroupGeneral },
+  { id: "placeholder", label: UI.moduleGroupPlaceholder },
 ];
 
 export function moduleLabel(id: string): string {

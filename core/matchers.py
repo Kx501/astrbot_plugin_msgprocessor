@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""主匹配：regex / simple / passthrough / anchor_slice。锚点仅用于 anchor_slice。"""
+"""locate 步骤的定位器：regex / simple / anchor_slice / placeholder。"""
 from __future__ import annotations
 
 import re
@@ -7,6 +7,7 @@ from functools import lru_cache
 from typing import Any
 
 from .models import MatchHit, Span
+from .placeholders import scan_placeholders
 from .window import resolve_window
 
 
@@ -124,18 +125,24 @@ def find_hits_simple(
     return hits
 
 
-def find_hits_passthrough(
+def find_hits_placeholder(
     slice_text: str,
     global_offset: int,
-    _matcher_cfg: dict[str, Any],
+    matcher_cfg: dict[str, Any],
     *,
     max_matches: int,
 ) -> list[MatchHit]:
-    """整段文本一次命中，进入内层；空串不产生命中。"""
-    n = len(slice_text)
-    if n == 0:
+    """每个占位符区间为一次命中；cfg 含 presets / custom_patterns / include_empty。"""
+    spans = scan_placeholders(slice_text, matcher_cfg)
+    if not spans:
         return []
-    return [_match_hit_plain(slice_text, 0, n, global_offset)]
+    unlimited = max_matches <= 0
+    hits: list[MatchHit] = []
+    for span in spans:
+        if (not unlimited) and len(hits) >= max_matches:
+            break
+        hits.append(_match_hit_plain(slice_text, span.start, span.end, global_offset))
+    return hits
 
 
 def find_hits_anchor_slice(
@@ -165,8 +172,8 @@ def find_hits(
     max_matches: int,
 ) -> list[MatchHit]:
     mtype = (matcher_cfg.get("type") or "regex").lower()
-    if mtype == "passthrough":
-        return find_hits_passthrough(
+    if mtype == "placeholder":
+        return find_hits_placeholder(
             slice_text,
             global_offset,
             matcher_cfg,

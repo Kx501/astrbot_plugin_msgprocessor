@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 from .conditions import eval_condition
 from .models import MatchHit, ModuleResult, ProcessingContext
+from .placeholders import delete_placeholders, has_placeholders, replace_placeholders
 
 ModuleFn = Callable[[str, dict[str, Any], ProcessingContext, MatchHit | None], ModuleResult]
 
@@ -176,6 +177,35 @@ def mod_split(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: Match
     return ModuleResult(text=parts[0], split_parts=parts)
 
 
+def _placeholder_scan_cfg(cfg: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "presets": cfg.get("presets"),
+        "custom_patterns": cfg.get("custom_patterns"),
+        "include_empty": cfg.get("include_empty", True),
+    }
+
+
+def mod_placeholder_block(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
+    """当前作用域含占位符时拦截发送。"""
+    _ = ctx, hit
+    if has_placeholders(text, _placeholder_scan_cfg(cfg)):
+        return ModuleResult(text="", drop=True)
+    return ModuleResult(text)
+
+
+def mod_placeholder_delete(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
+    """删除当前作用域内的占位符片段。"""
+    _ = ctx, hit
+    return ModuleResult(delete_placeholders(text, _placeholder_scan_cfg(cfg)))
+
+
+def mod_placeholder_replace(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
+    """将占位符替换为配置的 fallback 文案。"""
+    _ = ctx, hit
+    replacement = str(cfg.get("replacement", ""))
+    return ModuleResult(replace_placeholders(text, _placeholder_scan_cfg(cfg), replacement=replacement))
+
+
 def mod_delete(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
     """删除命中段内所有与 ``from`` 相同的字面量（整段替换为空）。"""
     _ = ctx, hit
@@ -202,6 +232,9 @@ BUILTIN_MODULES: dict[str, ModuleFn] = {
     "split": mod_split,
     "split_by_marker": mod_split,
     "guard": mod_guard,
+    "placeholder_block": mod_placeholder_block,
+    "placeholder_delete": mod_placeholder_delete,
+    "placeholder_replace": mod_placeholder_replace,
 }
 
 

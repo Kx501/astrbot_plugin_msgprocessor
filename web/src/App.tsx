@@ -30,7 +30,7 @@ function emptyRule(): RuleUI {
     priority: 0,
     limits: { max_matches: 0 },
     pipeline: [
-      { _key: newKey(), id: "match", label: "s1", config: defaultConfig("match") },
+      { _key: newKey(), id: "locate", label: "s1", config: defaultConfig("locate") },
       { _key: newKey(), id: "noop", label: "s2", config: defaultConfig("noop") },
     ],
   };
