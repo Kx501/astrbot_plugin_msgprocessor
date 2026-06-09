@@ -50,13 +50,6 @@ def _parse_regex_flags(raw: Any) -> int:
     return bits
 
 
-def _text_source(region_text: str, full_message: str, cfg: dict[str, Any]) -> str:
-    where = str(cfg.get("in", "region")).strip().lower()
-    if where in ("message", "full"):
-        return full_message
-    return region_text
-
-
 def _flag_true(raw: Any) -> bool:
     return str(raw or "false").strip().lower() in ("true", "1", "yes")
 
@@ -174,13 +167,13 @@ def _compare_op_parts(op: str) -> tuple[str, str] | None:
     return None
 
 
-def eval_condition(region_text: str, full_message: str, cfg: dict[str, Any]) -> bool:
-    """单条运算型条件；未配置 op 时视为恒成立。"""
+def eval_condition(text: str, cfg: dict[str, Any]) -> bool:
+    """单条运算型条件，作用于当前工作区文本；未配置 op 时视为恒成立。"""
     op = str(cfg.get("op") or "").strip().lower()
     if not op:
         return True
 
-    source = _text_source(region_text, full_message, cfg)
+    source = text
 
     if op in _DATE_OPS:
         parsed = _parse_date_from_text(source, cfg)

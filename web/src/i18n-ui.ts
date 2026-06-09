@@ -53,7 +53,7 @@ export const UI = {
   locateType: "定位方式",
   locateRegex: "正则区间",
   locateSimple: "简单条件",
-  locatePlaceholder: "按占位符分段",
+  locateMarker: "按模式标记分段",
   locateAnchorSlice: "锚点区间",
   locateAnchorSliceHint:
     "取开始、结束锚点之间的内容为工作区；解析失败则跳过直至下一个划定作用域步骤。",
@@ -81,14 +81,14 @@ export const UI = {
   moduleTranslateLlm: "AI翻译",
   modulePrepend: "前方拼接",
   moduleAppend: "后方拼接",
-  moduleSplit: "标记分割",
   moduleGuard: "条件守卫",
   moduleLocate: "划定作用域",
   moduleGroupGeneral: "通用",
-  moduleGroupPlaceholder: "标记与占位符",
-  modulePlaceholderBlock: "占位符拦截",
-  modulePlaceholderDelete: "占位符删除",
-  modulePlaceholderReplace: "占位符替换",
+  moduleGroupMarker: "标记",
+  moduleMarkerSplit: "标记分割",
+  moduleMarkerBlock: "标记拦截",
+  moduleMarkerDelete: "标记删除",
+  moduleMarkerReplace: "标记替换",
 
   guardWhenTrue: "条件成立时",
   guardWhenFalse: "条件不成立时",
@@ -120,8 +120,6 @@ export const UI = {
   guardCondDateRegex: "日期正则（可选，留空则用内置格式）",
   guardCondNumberRegex: "数值正则（可选，第 1 捕获组为数值）",
   guardCondThreshold: "比较阈值",
-  guardCondInRegion: "在命中段中查找",
-  guardCondInMessage: "在整条消息中查找",
   guardCondIfNoDate: "未找到日期时视为成立",
   guardCondIfMissing: "未找到数值时视为成立",
   guardHint:
@@ -135,7 +133,6 @@ export const UI = {
   cfgFrom: "查找",
   cfgTo: "替换为",
   cfgDeleteFrom: "要删除的原文（全部匹配）",
-  cfgWholeFromEmpty: "为空时处理整段",
   cfgReplaceRegex: "在作用域内按正则替换",
   cfgRegexFlags: "正则标志（逗号分隔）",
   cfgPrefix: "前方拼接内容",
@@ -144,26 +141,26 @@ export const UI = {
   cfgTranslateFallbackPrefix: "模型不可用或失败时的回退标记",
   cfgTranslateLlmHint:
     "译向与提示词在插件配置中设置；测试时仅展示回退标记。",
-  cfgSplitMarker: "拆分标记",
-  cfgDeleteMarker: "删除标记",
-  cfgTrimPartStart: "清理段首换行",
-  cfgTrimPartEnd: "清理段尾换行",
-  cfgSplitHint:
-    "将命中段按标记拆为多条消息。段首换行作用于首段之后（标记后的换行）；段尾换行作用于尾段之前（标记前的换行）；整条消息末尾换行会保留。支持转义：\\n、\\t、\\\\。",
+  cfgMarkerLiteral: "字面量标记",
+  cfgMarkerDeleteLiteral: "拆分时删除标记",
+  cfgMarkerTrimPartStart: "清理段首换行",
+  cfgMarkerTrimPartEnd: "清理段尾换行",
+  cfgMarkerSplitHint:
+    "在标记点将当前作用域拆为多条待发消息。字面量标记如 ---；支持转义 \\n、\\t、\\\\。",
   cfgNone: "此模块无额外参数",
-  cfgPlaceholderPresets: "内置预设",
-  cfgPlaceholderPresetBracket: "方括号 […]",
-  cfgPlaceholderPresetMustache: "双花括号 {{…}}",
-  cfgPlaceholderPresetPercent: "百分号 %…%",
-  cfgPlaceholderPresetDollar: "美元符 ${…}",
-  cfgPlaceholderPresetCurly: "花括号标识符 {name}",
-  cfgPlaceholderCustomPatterns: "自定义正则（每行一条）",
-  cfgPlaceholderIncludeEmpty: "包含空占位符（如 []、{{}}）",
-  cfgPlaceholderReplacement: "替换为",
-  cfgPlaceholderHint:
-    "对当前作用域文本扫描占位符；多个模块共用同一套预设与自定义正则。拦截模块发现占位符即不发送。",
-  cfgPlaceholderLocateHint:
-    "每个占位符区间为一段工作区，便于后续步骤只处理占位符片段。",
+  cfgMarkerPresets: "模式标记预设",
+  cfgMarkerPresetBracket: "方括号 […]",
+  cfgMarkerPresetMustache: "双花括号 {{…}}",
+  cfgMarkerPresetPercent: "百分号 %…%",
+  cfgMarkerPresetDollar: "美元符 ${…}",
+  cfgMarkerPresetCurly: "花括号标识符 {name}",
+  cfgMarkerCustomPatterns: "自定义模式正则（每行一条）",
+  cfgMarkerIncludeEmpty: "包含空标记（如 []、{{}}）",
+  cfgMarkerReplacement: "替换为",
+  cfgMarkerPatternHint:
+    "在标记点处理：按预设或正则找到模式标记后拦截、删除或替换。与「标记分割」共用同一套模式配置思路。",
+  cfgMarkerLocateHint:
+    "每个模式标记区间为一段工作区，便于后续步骤只处理标记片段。",
 
   moduleLabel: "模块类型",
   addModule: "添加处理步骤",
@@ -208,12 +205,12 @@ export const GUARD_CMP_BY_KIND: Record<string, { value: string; label: string }[
   number: GUARD_CMP_COMMON,
 };
 
-export const PLACEHOLDER_PRESET_OPTIONS: { value: string; label: string }[] = [
-  { value: "bracket", label: UI.cfgPlaceholderPresetBracket },
-  { value: "mustache", label: UI.cfgPlaceholderPresetMustache },
-  { value: "percent", label: UI.cfgPlaceholderPresetPercent },
-  { value: "dollar", label: UI.cfgPlaceholderPresetDollar },
-  { value: "curly", label: UI.cfgPlaceholderPresetCurly },
+export const MARKER_PRESET_OPTIONS: { value: string; label: string }[] = [
+  { value: "bracket", label: UI.cfgMarkerPresetBracket },
+  { value: "mustache", label: UI.cfgMarkerPresetMustache },
+  { value: "percent", label: UI.cfgMarkerPresetPercent },
+  { value: "dollar", label: UI.cfgMarkerPresetDollar },
+  { value: "curly", label: UI.cfgMarkerPresetCurly },
 ];
 
 export type ModuleOption = { value: string; label: string; group?: string };
@@ -227,15 +224,15 @@ export const MODULE_OPTIONS: ModuleOption[] = [
   { value: "prepend", label: UI.modulePrepend, group: "general" },
   { value: "append", label: UI.moduleAppend, group: "general" },
   { value: "guard", label: UI.moduleGuard, group: "general" },
-  { value: "split", label: UI.moduleSplit, group: "placeholder" },
-  { value: "placeholder_block", label: UI.modulePlaceholderBlock, group: "placeholder" },
-  { value: "placeholder_delete", label: UI.modulePlaceholderDelete, group: "placeholder" },
-  { value: "placeholder_replace", label: UI.modulePlaceholderReplace, group: "placeholder" },
+  { value: "marker_split", label: UI.moduleMarkerSplit, group: "marker" },
+  { value: "marker_block", label: UI.moduleMarkerBlock, group: "marker" },
+  { value: "marker_delete", label: UI.moduleMarkerDelete, group: "marker" },
+  { value: "marker_replace", label: UI.moduleMarkerReplace, group: "marker" },
 ];
 
 export const MODULE_GROUPS: { id: string; label: string }[] = [
   { id: "general", label: UI.moduleGroupGeneral },
-  { id: "placeholder", label: UI.moduleGroupPlaceholder },
+  { id: "marker", label: UI.moduleGroupMarker },
 ];
 
 export function moduleLabel(id: string): string {

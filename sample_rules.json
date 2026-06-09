@@ -33,7 +33,10 @@
       "enabled": false,
       "priority": 9,
       "pipeline": [
-        { "id": "split", "config": { "marker": "---", "delete_marker": true } }
+        {
+          "id": "marker_split",
+          "config": { "literal": "---", "delete_literal": true }
+        }
       ]
     },
     {
@@ -174,12 +177,12 @@
       "pipeline": [{ "id": "prepend", "config": { "prefix": "[tag] " } }]
     },
     {
-      "id": "block_unresolved_placeholder",
+      "id": "block_unresolved_marker",
       "enabled": false,
       "priority": 15,
       "pipeline": [
         {
-          "id": "placeholder_block",
+          "id": "marker_block",
           "config": {
             "presets": ["bracket", "mustache"],
             "custom_patterns": [],
@@ -189,12 +192,12 @@
       ]
     },
     {
-      "id": "replace_placeholder_fallback",
+      "id": "replace_marker_fallback",
       "enabled": false,
       "priority": 6,
       "pipeline": [
         {
-          "id": "placeholder_replace",
+          "id": "marker_replace",
           "config": {
             "presets": ["bracket", "mustache"],
             "custom_patterns": [],
@@ -205,7 +208,7 @@
       ]
     },
     {
-      "id": "strip_placeholder_in_brackets",
+      "id": "strip_marker_in_brackets",
       "enabled": false,
       "priority": 7,
       "limits": { "max_matches": 8 },
@@ -222,7 +225,7 @@
           }
         },
         {
-          "id": "placeholder_delete",
+          "id": "marker_delete",
           "config": {
             "presets": ["bracket", "mustache"],
             "custom_patterns": [],

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""locate 步骤的定位器：regex / simple / anchor_slice / placeholder。"""
+"""locate 步骤的定位器：regex / simple / anchor_slice / marker。"""
 from __future__ import annotations
 
 import re
@@ -7,7 +7,7 @@ from functools import lru_cache
 from typing import Any
 
 from .models import MatchHit, Span
-from .placeholders import scan_placeholders
+from .markers import scan_pattern_markers
 from .window import resolve_window
 
 
@@ -125,15 +125,15 @@ def find_hits_simple(
     return hits
 
 
-def find_hits_placeholder(
+def find_hits_marker(
     slice_text: str,
     global_offset: int,
     matcher_cfg: dict[str, Any],
     *,
     max_matches: int,
 ) -> list[MatchHit]:
-    """每个占位符区间为一次命中；cfg 含 presets / custom_patterns / include_empty。"""
-    spans = scan_placeholders(slice_text, matcher_cfg)
+    """每个模式标记区间为一次命中；cfg 含 presets / custom_patterns / include_empty。"""
+    spans = scan_pattern_markers(slice_text, matcher_cfg)
     if not spans:
         return []
     unlimited = max_matches <= 0
@@ -172,8 +172,8 @@ def find_hits(
     max_matches: int,
 ) -> list[MatchHit]:
     mtype = (matcher_cfg.get("type") or "regex").lower()
-    if mtype == "placeholder":
-        return find_hits_placeholder(
+    if mtype == "marker":
+        return find_hits_marker(
             slice_text,
             global_offset,
             matcher_cfg,

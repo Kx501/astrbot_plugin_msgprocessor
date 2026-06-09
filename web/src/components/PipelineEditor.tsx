@@ -22,7 +22,7 @@ import {
   GUARD_KIND_OPTIONS,
   MODULE_GROUPS,
   MODULE_OPTIONS,
-  PLACEHOLDER_PRESET_OPTIONS,
+  MARKER_PRESET_OPTIONS,
   UI,
   moduleLabel,
 } from "../i18n-ui";
@@ -42,20 +42,20 @@ function emptyAnchor(): WindowAnchor {
   return { literal: "", occurrence: 0, inclusive: false };
 }
 
-const DEFAULT_PLACEHOLDER_PRESETS = ["bracket", "mustache"];
+const DEFAULT_MARKER_PRESETS = ["bracket", "mustache"];
 
-function defaultPlaceholderConfig(): Record<string, unknown> {
+function defaultMarkerPatternConfig(): Record<string, unknown> {
   return {
-    presets: [...DEFAULT_PLACEHOLDER_PRESETS],
+    presets: [...DEFAULT_MARKER_PRESETS],
     custom_patterns: [],
     include_empty: true,
   };
 }
 
-function placeholderMatcherConfig(): Record<string, unknown> {
+function markerLocateMatcherConfig(): Record<string, unknown> {
   return {
-    type: "placeholder",
-    ...defaultPlaceholderConfig(),
+    type: "marker",
+    ...defaultMarkerPatternConfig(),
   };
 }
 
@@ -122,7 +122,7 @@ function guardDefaults(op: string): Record<string, unknown> {
 export function defaultConfig(mid: string): Record<string, unknown> {
   switch (mid) {
     case "replace":
-      return { from: "", to: "", whole_from_empty: false, regex: false, regex_flags: "" };
+      return { from: "", to: "", regex: false, regex_flags: "" };
     case "translate_llm":
       return { prefix: "[译]" };
     case "append":
@@ -130,9 +130,14 @@ export function defaultConfig(mid: string): Record<string, unknown> {
     case "prepend":
       return { prefix: "" };
     case "delete":
-      return { from: "", whole_from_empty: false };
-    case "split":
-      return { marker: "[SPLIT]", delete_marker: true, trim_part_start: true, trim_part_end: true };
+      return { from: "" };
+    case "marker_split":
+      return {
+        literal: "---",
+        delete_literal: true,
+        trim_part_start: true,
+        trim_part_end: true,
+      };
     case "guard":
       return {
         ...guardDefaults("date_outside_days"),
@@ -144,11 +149,11 @@ export function defaultConfig(mid: string): Record<string, unknown> {
         matcher: { type: "simple", op: "contains", value: "", ignore_case: false },
         region: { kind: "match" },
       };
-    case "placeholder_block":
-    case "placeholder_delete":
-      return defaultPlaceholderConfig();
-    case "placeholder_replace":
-      return { ...defaultPlaceholderConfig(), replacement: "" };
+    case "marker_block":
+    case "marker_delete":
+      return defaultMarkerPatternConfig();
+    case "marker_replace":
+      return { ...defaultMarkerPatternConfig(), replacement: "" };
     default:
       return {};
   }
@@ -167,7 +172,7 @@ function parseCustomPatterns(raw: unknown): string[] {
   return [];
 }
 
-function PlaceholderConfigFields({
+function MarkerPatternConfigFields({
   c,
   set,
   showReplacement = false,
@@ -178,7 +183,7 @@ function PlaceholderConfigFields({
 }) {
   const presets = Array.isArray(c.presets)
     ? (c.presets as string[]).map((s) => String(s))
-    : [...DEFAULT_PLACEHOLDER_PRESETS];
+    : [...DEFAULT_MARKER_PRESETS];
   const customText = parseCustomPatterns(c.custom_patterns).join("\n");
 
   const togglePreset = (value: string, checked: boolean) => {
@@ -188,16 +193,16 @@ function PlaceholderConfigFields({
     } else {
       next.delete(value);
     }
-    const ordered = PLACEHOLDER_PRESET_OPTIONS.map((o) => o.value).filter((v) => next.has(v));
-    set({ presets: ordered.length > 0 ? ordered : [...DEFAULT_PLACEHOLDER_PRESETS] });
+    const ordered = MARKER_PRESET_OPTIONS.map((o) => o.value).filter((v) => next.has(v));
+    set({ presets: ordered.length > 0 ? ordered : [...DEFAULT_MARKER_PRESETS] });
   };
 
   return (
     <div className="field-stack field-stack--block">
       <div className="field-stack">
-        <span className="label-text">{UI.cfgPlaceholderPresets}</span>
+        <span className="label-text">{UI.cfgMarkerPresets}</span>
         <div className="pipeline-check-row">
-          {PLACEHOLDER_PRESET_OPTIONS.map((o) => (
+          {MARKER_PRESET_OPTIONS.map((o) => (
             <label key={o.value} className="field-inline-check">
               <input
                 type="checkbox"
@@ -210,7 +215,7 @@ function PlaceholderConfigFields({
         </div>
       </div>
       <label className="field-stack field-stack--block">
-        <span className="label-text">{UI.cfgPlaceholderCustomPatterns}</span>
+        <span className="label-text">{UI.cfgMarkerCustomPatterns}</span>
         <textarea
           rows={3}
           value={customText}
@@ -223,18 +228,18 @@ function PlaceholderConfigFields({
           checked={Boolean(c.include_empty ?? true)}
           onChange={(e) => set({ include_empty: e.target.checked })}
         />
-        <span>{UI.cfgPlaceholderIncludeEmpty}</span>
+        <span>{UI.cfgMarkerIncludeEmpty}</span>
       </label>
       {showReplacement ? (
         <label className="field-stack field-stack--block">
-          <span className="label-text">{UI.cfgPlaceholderReplacement}</span>
+          <span className="label-text">{UI.cfgMarkerReplacement}</span>
           <input
             value={String(c.replacement ?? "")}
             onChange={(e) => set({ replacement: e.target.value })}
           />
         </label>
       ) : null}
-      <p className="muted pipeline-config-hint">{UI.cfgPlaceholderHint}</p>
+      <p className="muted pipeline-config-hint">{UI.cfgMarkerPatternHint}</p>
     </div>
   );
 }
@@ -335,14 +340,14 @@ function LocateConfigFields({
               ignore_start_anchor_line: false,
               ignore_end_anchor_line: false,
             });
-          } else if (t === "placeholder") {
-            setMatcher(placeholderMatcherConfig());
+          } else if (t === "marker") {
+            setMatcher(markerLocateMatcherConfig());
           }
         }}
       >
         <option value="regex">{UI.locateRegex}</option>
         <option value="simple">{UI.locateSimple}</option>
-        <option value="placeholder">{UI.locatePlaceholder}</option>
+        <option value="marker">{UI.locateMarker}</option>
         <option value="anchor_slice">{UI.locateAnchorSlice}</option>
       </select>
     </label>
@@ -433,13 +438,13 @@ function LocateConfigFields({
           </label>
         </div>
       ) : null}
-      {mtype === "placeholder" ? (
+      {mtype === "marker" ? (
         <>
-          <PlaceholderConfigFields
+          <MarkerPatternConfigFields
             c={matcher}
             set={(patch) => setMatcher({ ...matcher, ...patch })}
           />
-          <p className="muted pipeline-config-hint">{UI.cfgPlaceholderLocateHint}</p>
+          <p className="muted pipeline-config-hint">{UI.cfgMarkerLocateHint}</p>
         </>
       ) : null}
 
@@ -598,14 +603,6 @@ function ModuleConfigFields({
           <label className="field-inline-check field-inline-check--align-input">
             <input
               type="checkbox"
-              checked={Boolean(c.whole_from_empty)}
-              onChange={(e) => set({ whole_from_empty: e.target.checked })}
-            />
-            <span>{UI.cfgWholeFromEmpty}</span>
-          </label>
-          <label className="field-inline-check field-inline-check--align-input">
-            <input
-              type="checkbox"
               checked={Boolean(c.regex)}
               onChange={(e) => set({ regex: e.target.checked })}
             />
@@ -661,31 +658,23 @@ function ModuleConfigFields({
             <span className="label-text">{UI.cfgDeleteFrom}</span>
             <input value={String(c.from ?? "")} onChange={(e) => set({ from: e.target.value })} />
           </label>
-          <label className="field-inline-check field-inline-check--align-input">
-            <input
-              type="checkbox"
-              checked={Boolean(c.whole_from_empty)}
-              onChange={(e) => set({ whole_from_empty: e.target.checked })}
-            />
-            <span>{UI.cfgWholeFromEmpty}</span>
-          </label>
         </div>
       );
-    case "split":
+    case "marker_split":
       return (
         <div className="field-stack field-stack--block">
           <label className="field-stack field-stack--block">
-            <span className="label-text">{UI.cfgSplitMarker}</span>
-            <input value={String(c.marker ?? "")} onChange={(e) => set({ marker: e.target.value })} />
+            <span className="label-text">{UI.cfgMarkerLiteral}</span>
+            <input value={String(c.literal ?? "")} onChange={(e) => set({ literal: e.target.value })} />
           </label>
           <div className="pipeline-check-row">
             <label className="field-inline-check">
               <input
                 type="checkbox"
-                checked={Boolean(c.delete_marker ?? true)}
-                onChange={(e) => set({ delete_marker: e.target.checked })}
+                checked={Boolean(c.delete_literal ?? true)}
+                onChange={(e) => set({ delete_literal: e.target.checked })}
               />
-              <span>{UI.cfgDeleteMarker}</span>
+              <span>{UI.cfgMarkerDeleteLiteral}</span>
             </label>
             <label className="field-inline-check">
               <input
@@ -693,7 +682,7 @@ function ModuleConfigFields({
                 checked={Boolean(c.trim_part_start ?? true)}
                 onChange={(e) => set({ trim_part_start: e.target.checked })}
               />
-              <span>{UI.cfgTrimPartStart}</span>
+              <span>{UI.cfgMarkerTrimPartStart}</span>
             </label>
             <label className="field-inline-check">
               <input
@@ -701,10 +690,10 @@ function ModuleConfigFields({
                 checked={Boolean(c.trim_part_end ?? true)}
                 onChange={(e) => set({ trim_part_end: e.target.checked })}
               />
-              <span>{UI.cfgTrimPartEnd}</span>
+              <span>{UI.cfgMarkerTrimPartEnd}</span>
             </label>
           </div>
-          <p className="muted pipeline-config-hint">{UI.cfgSplitHint}</p>
+          <p className="muted pipeline-config-hint">{UI.cfgMarkerSplitHint}</p>
         </div>
       );
     case "guard":
@@ -718,11 +707,11 @@ function ModuleConfigFields({
       );
     case "locate":
       return <LocateConfigFields config={c} set={set} />;
-    case "placeholder_block":
-    case "placeholder_delete":
-      return <PlaceholderConfigFields c={c} set={set} />;
-    case "placeholder_replace":
-      return <PlaceholderConfigFields c={c} set={set} showReplacement />;
+    case "marker_block":
+    case "marker_delete":
+      return <MarkerPatternConfigFields c={c} set={set} />;
+    case "marker_replace":
+      return <MarkerPatternConfigFields c={c} set={set} showReplacement />;
     default:
       return <p className="muted">{UI.cfgNone}</p>;
   }

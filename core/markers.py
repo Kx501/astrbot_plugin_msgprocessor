@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""占位符扫描：preset + 自定义正则，供 placeholder_* 模块与 locate(placeholder) 共用。"""
+"""标记处理：字面量标记（分割）与模式标记（预设/正则，拦截/删除/替换/locate）。"""
 from __future__ import annotations
 
 import re
@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
-# 内置 preset 名称 → 正则（相对当前作用域文本）
+# 内置模式标记 preset → 正则
 PRESET_PATTERNS: dict[str, str] = {
     "bracket": r"\[[^\[\]\n]*\]",
     "mustache": r"\{\{[^{}\n]*\}\}",
@@ -18,9 +18,17 @@ PRESET_PATTERNS: dict[str, str] = {
 
 DEFAULT_PRESETS: tuple[str, ...] = ("bracket", "mustache")
 
+_BACKSLASH_PLACEHOLDER = "\x00"
+
+
+def unescape_config_literal(s: str) -> str:
+    out = s.replace("\\\\", _BACKSLASH_PLACEHOLDER)
+    out = out.replace("\\n", "\n").replace("\\r", "\r").replace("\\t", "\t")
+    return out.replace(_BACKSLASH_PLACEHOLDER, "\\")
+
 
 @dataclass(frozen=True)
-class PlaceholderSpan:
+class MarkerSpan:
     """相对被扫描文本的半开区间。"""
 
     start: int
@@ -50,8 +58,8 @@ def _normalize_custom_patterns(raw: Any) -> list[str]:
     return out
 
 
-def parse_scan_config(cfg: dict[str, Any]) -> tuple[list[str], list[str], bool]:
-    """解析 presets、custom_patterns、include_empty。"""
+def parse_pattern_config(cfg: dict[str, Any]) -> tuple[list[str], list[str], bool]:
+    """模式标记：presets、custom_patterns、include_empty。"""
     presets = _normalize_presets(cfg.get("presets"))
     custom = _normalize_custom_patterns(cfg.get("custom_patterns"))
     include_empty = bool(cfg.get("include_empty", True))
@@ -89,15 +97,15 @@ def _accept_span(text: str, start: int, end: int, preset: str | None, *, include
     return bool(_inner_substance(text[start:end], preset))
 
 
-def _merge_spans(spans: list[PlaceholderSpan]) -> list[PlaceholderSpan]:
+def _merge_spans(spans: list[MarkerSpan]) -> list[MarkerSpan]:
     if not spans:
         return []
     ordered = sorted(spans, key=lambda s: (s.start, s.end))
-    merged: list[PlaceholderSpan] = [ordered[0]]
+    merged: list[MarkerSpan] = [ordered[0]]
     for span in ordered[1:]:
         last = merged[-1]
         if span.start <= last.end:
-            merged[-1] = PlaceholderSpan(
+            merged[-1] = MarkerSpan(
                 last.start,
                 max(last.end, span.end),
                 last.preset or span.preset,
@@ -107,12 +115,12 @@ def _merge_spans(spans: list[PlaceholderSpan]) -> list[PlaceholderSpan]:
     return merged
 
 
-def scan_placeholders(text: str, cfg: dict[str, Any]) -> list[PlaceholderSpan]:
-    """扫描文本中所有占位符区间（合并重叠后）。"""
+def scan_pattern_markers(text: str, cfg: dict[str, Any]) -> list[MarkerSpan]:
+    """扫描模式标记区间（预设 + 自定义正则，合并重叠）。"""
     if not text:
         return []
-    presets, custom, include_empty = parse_scan_config(cfg)
-    found: list[PlaceholderSpan] = []
+    presets, custom, include_empty = parse_pattern_config(cfg)
+    found: list[MarkerSpan] = []
 
     for preset in presets:
         pattern = PRESET_PATTERNS.get(preset)
@@ -121,7 +129,7 @@ def scan_placeholders(text: str, cfg: dict[str, Any]) -> list[PlaceholderSpan]:
         for m in re.finditer(pattern, text):
             rs, re_ = m.span()
             if _accept_span(text, rs, re_, preset, include_empty=include_empty):
-                found.append(PlaceholderSpan(rs, re_, preset))
+                found.append(MarkerSpan(rs, re_, preset))
 
     for pat in custom:
         rx = _compile_custom(pat)
@@ -130,22 +138,21 @@ def scan_placeholders(text: str, cfg: dict[str, Any]) -> list[PlaceholderSpan]:
         for m in rx.finditer(text):
             rs, re_ = m.span()
             if _accept_span(text, rs, re_, None, include_empty=include_empty):
-                found.append(PlaceholderSpan(rs, re_, "custom"))
+                found.append(MarkerSpan(rs, re_, "custom"))
 
     return _merge_spans(found)
 
 
-def has_placeholders(text: str, cfg: dict[str, Any]) -> bool:
-    return bool(scan_placeholders(text, cfg))
+def has_pattern_markers(text: str, cfg: dict[str, Any]) -> bool:
+    return bool(scan_pattern_markers(text, cfg))
 
 
-def apply_placeholder_spans(
+def apply_marker_spans(
     text: str,
-    spans: list[PlaceholderSpan],
+    spans: list[MarkerSpan],
     *,
     replacement: str | None,
 ) -> str:
-    """按区间删除或替换占位符；从右向左避免下标漂移。"""
     if not spans:
         return text
     buf = text
@@ -157,11 +164,47 @@ def apply_placeholder_spans(
     return buf
 
 
-def delete_placeholders(text: str, cfg: dict[str, Any]) -> str:
-    spans = scan_placeholders(text, cfg)
-    return apply_placeholder_spans(text, spans, replacement=None)
+def delete_pattern_markers(text: str, cfg: dict[str, Any]) -> str:
+    spans = scan_pattern_markers(text, cfg)
+    return apply_marker_spans(text, spans, replacement=None)
 
 
-def replace_placeholders(text: str, cfg: dict[str, Any], *, replacement: str) -> str:
-    spans = scan_placeholders(text, cfg)
-    return apply_placeholder_spans(text, spans, replacement=replacement)
+def replace_pattern_markers(text: str, cfg: dict[str, Any], *, replacement: str) -> str:
+    spans = scan_pattern_markers(text, cfg)
+    return apply_marker_spans(text, spans, replacement=replacement)
+
+
+def _trim_split_parts(parts: list[str], *, trim_start: bool, trim_end: bool) -> list[str]:
+    out: list[str] = []
+    for i, part in enumerate(parts):
+        s = part
+        if trim_end and i < len(parts) - 1:
+            s = s.rstrip("\n\r")
+        if trim_start and i > 0:
+            s = s.lstrip("\n\r")
+        out.append(s)
+    return out
+
+
+def split_by_literal_marker(text: str, cfg: dict[str, Any]) -> list[str]:
+    """按字面量标记拆分为多段；用于 marker_split。"""
+    literal_raw = cfg.get("literal")
+    if not isinstance(literal_raw, str) or literal_raw == "":
+        return [text]
+    literal = unescape_config_literal(literal_raw)
+    if literal not in text:
+        return [text]
+    delete_literal = bool(cfg.get("delete_literal", True))
+    trim_start = bool(cfg.get("trim_part_start", True))
+    trim_end = bool(cfg.get("trim_part_end", True))
+    if delete_literal:
+        parts = text.split(literal)
+    else:
+        raw = text.split(literal)
+        parts = [raw[0]]
+        for chunk in raw[1:]:
+            parts.append(literal + chunk)
+    if trim_start or trim_end:
+        parts = _trim_split_parts(parts, trim_start=trim_start, trim_end=trim_end)
+    cleaned = [p for p in parts if p]
+    return cleaned if cleaned else [text]

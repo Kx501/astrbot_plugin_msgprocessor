@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """内置处理模块注册表。
 
-变换模块对当前作用域文本（``working_text``）操作，不执行定位/路由。
+变换模块对当前工作区文本操作；作用域由 ``locate`` 划定，模块内不再切换范围。
 replace 默认使用字面量 ``str.replace``。
 """
 from __future__ import annotations
@@ -11,7 +11,12 @@ from typing import Any, Callable
 
 from .conditions import eval_condition
 from .models import MatchHit, ModuleResult, ProcessingContext
-from .placeholders import delete_placeholders, has_placeholders, replace_placeholders
+from .markers import (
+    delete_pattern_markers,
+    has_pattern_markers,
+    replace_pattern_markers,
+    split_by_literal_marker,
+)
 
 ModuleFn = Callable[[str, dict[str, Any], ProcessingContext, MatchHit | None], ModuleResult]
 
@@ -61,10 +66,9 @@ def _guard_result(text: str, outcome: str, cfg: dict[str, Any], when_key: str) -
 
 
 def mod_guard(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """条件守卫：对当前作用域文本做运算型判断，按成立/不成立配置 pass / block / halt / goto。"""
-    _ = hit
-    full = ctx.message if isinstance(ctx.message, str) else text
-    matched = eval_condition(text, full, cfg)
+    """条件守卫：对当前工作区文本做运算型判断，按成立/不成立配置 pass / block / halt / goto。"""
+    _ = ctx, hit
+    matched = eval_condition(text, cfg)
     when_key = "when_true" if matched else "when_false"
     outcome = _parse_guard_outcome(cfg.get(when_key), default="pass")
     return _guard_result(text, outcome, cfg, when_key)
@@ -76,18 +80,13 @@ def mod_noop(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchH
 
 
 def mod_replace(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """在命中段内替换：默认字面量；可选 regex 模式（re.sub）。"""
+    """在当前工作区内替换：默认字面量；可选 regex 模式（re.sub）。"""
     _ = ctx, hit
     out = text
     old = cfg.get("from")
-    whole_from_empty = bool(cfg.get("whole_from_empty", False))
-    from_is_empty = (not isinstance(old, str)) or old == ""
-    to_val = str(cfg.get("to", ""))
-
-    if from_is_empty:
-        if whole_from_empty:
-            return ModuleResult(to_val)
+    if (not isinstance(old, str)) or old == "":
         return ModuleResult(out)
+    to_val = str(cfg.get("to", ""))
 
     if bool(cfg.get("regex", False)):
         try:
@@ -119,65 +118,7 @@ def mod_prepend(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: Mat
     return ModuleResult(prefix + text)
 
 
-def _apply_boundary_trim(parts: list[str], *, trim_start: bool, trim_end: bool) -> list[str]:
-    n = len(parts)
-    out: list[str] = []
-    for i, part in enumerate(parts):
-        s = part
-        if trim_end and i < n - 1:
-            s = s.rstrip("\n\r")
-        if trim_start and i > 0:
-            s = s.lstrip("\n\r")
-        out.append(s)
-    return out
-
-
-def _split_by_marker(
-    text: str,
-    marker: str,
-    *,
-    delete_marker: bool,
-    trim_start: bool,
-    trim_end: bool,
-) -> list[str]:
-    if marker == "" or marker not in text:
-        return [text]
-    if delete_marker:
-        parts = text.split(marker)
-    else:
-        raw = text.split(marker)
-        parts = [raw[0]]
-        for chunk in raw[1:]:
-            parts.append(marker + chunk)
-    if trim_start or trim_end:
-        parts = _apply_boundary_trim(parts, trim_start=trim_start, trim_end=trim_end)
-    cleaned = [p for p in parts if p]
-    return cleaned if cleaned else [text]
-
-
-def mod_split(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """按标记将命中段拆为多条文本；拆分结果向上游传递为多条待发消息。"""
-    _ = ctx, hit
-    marker_raw = cfg.get("marker")
-    if not isinstance(marker_raw, str) or marker_raw == "":
-        return ModuleResult(text)
-    marker = _unescape_config_literal(marker_raw)
-    delete_marker = bool(cfg.get("delete_marker", True))
-    trim_start = bool(cfg.get("trim_part_start", True))
-    trim_end = bool(cfg.get("trim_part_end", True))
-    parts = _split_by_marker(
-        text,
-        marker,
-        delete_marker=delete_marker,
-        trim_start=trim_start,
-        trim_end=trim_end,
-    )
-    if len(parts) <= 1:
-        return ModuleResult(parts[0] if parts else text)
-    return ModuleResult(text=parts[0], split_parts=parts)
-
-
-def _placeholder_scan_cfg(cfg: dict[str, Any]) -> dict[str, Any]:
+def _pattern_marker_cfg(cfg: dict[str, Any]) -> dict[str, Any]:
     return {
         "presets": cfg.get("presets"),
         "custom_patterns": cfg.get("custom_patterns"),
@@ -185,38 +126,42 @@ def _placeholder_scan_cfg(cfg: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def mod_placeholder_block(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """当前作用域含占位符时拦截发送。"""
+def mod_marker_split(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
+    """按字面量标记将当前作用域拆为多条待发消息。"""
     _ = ctx, hit
-    if has_placeholders(text, _placeholder_scan_cfg(cfg)):
+    parts = split_by_literal_marker(text, cfg)
+    if len(parts) <= 1:
+        return ModuleResult(parts[0] if parts else text)
+    return ModuleResult(text=parts[0], split_parts=parts)
+
+
+def mod_marker_block(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
+    """当前作用域含模式标记时拦截发送。"""
+    _ = ctx, hit
+    if has_pattern_markers(text, _pattern_marker_cfg(cfg)):
         return ModuleResult(text="", drop=True)
     return ModuleResult(text)
 
 
-def mod_placeholder_delete(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """删除当前作用域内的占位符片段。"""
+def mod_marker_delete(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
+    """删除当前作用域内的模式标记片段。"""
     _ = ctx, hit
-    return ModuleResult(delete_placeholders(text, _placeholder_scan_cfg(cfg)))
+    return ModuleResult(delete_pattern_markers(text, _pattern_marker_cfg(cfg)))
 
 
-def mod_placeholder_replace(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """将占位符替换为配置的 fallback 文案。"""
+def mod_marker_replace(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
+    """将模式标记替换为配置的 fallback 文案。"""
     _ = ctx, hit
     replacement = str(cfg.get("replacement", ""))
-    return ModuleResult(replace_placeholders(text, _placeholder_scan_cfg(cfg), replacement=replacement))
+    return ModuleResult(replace_pattern_markers(text, _pattern_marker_cfg(cfg), replacement=replacement))
 
 
 def mod_delete(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """删除命中段内所有与 ``from`` 相同的字面量（整段替换为空）。"""
+    """删除当前工作区内所有与 ``from`` 相同的字面量。"""
     _ = ctx, hit
     out = text
     old = cfg.get("from")
-    whole_from_empty = bool(cfg.get("whole_from_empty", False))
-    from_is_empty = (not isinstance(old, str)) or old == ""
-
-    if from_is_empty:
-        if whole_from_empty:
-            return ModuleResult("")
+    if (not isinstance(old, str)) or old == "":
         return ModuleResult(out)
 
     out = out.replace(old, "")
@@ -229,12 +174,11 @@ BUILTIN_MODULES: dict[str, ModuleFn] = {
     "delete": mod_delete,
     "prepend": mod_prepend,
     "append": mod_append,
-    "split": mod_split,
-    "split_by_marker": mod_split,
     "guard": mod_guard,
-    "placeholder_block": mod_placeholder_block,
-    "placeholder_delete": mod_placeholder_delete,
-    "placeholder_replace": mod_placeholder_replace,
+    "marker_split": mod_marker_split,
+    "marker_block": mod_marker_block,
+    "marker_delete": mod_marker_delete,
+    "marker_replace": mod_marker_replace,
 }
 
 
