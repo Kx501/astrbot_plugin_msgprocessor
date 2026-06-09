@@ -44,8 +44,9 @@ function emptyAnchor(): WindowAnchor {
 
 const DEFAULT_MARKER_PRESETS = ["bracket", "mustache"];
 
-function defaultMarkerPatternConfig(): Record<string, unknown> {
+function defaultMarkerBaseConfig(): Record<string, unknown> {
   return {
+    literal: "",
     presets: [...DEFAULT_MARKER_PRESETS],
     custom_patterns: [],
     include_empty: true,
@@ -55,7 +56,7 @@ function defaultMarkerPatternConfig(): Record<string, unknown> {
 function markerLocateMatcherConfig(): Record<string, unknown> {
   return {
     type: "marker",
-    ...defaultMarkerPatternConfig(),
+    ...defaultMarkerBaseConfig(),
   };
 }
 
@@ -133,7 +134,9 @@ export function defaultConfig(mid: string): Record<string, unknown> {
       return { from: "" };
     case "marker_split":
       return {
+        ...defaultMarkerBaseConfig(),
         literal: "---",
+        presets: [],
         delete_literal: true,
         trim_part_start: true,
         trim_part_end: true,
@@ -151,9 +154,9 @@ export function defaultConfig(mid: string): Record<string, unknown> {
       };
     case "marker_block":
     case "marker_delete":
-      return defaultMarkerPatternConfig();
+      return defaultMarkerBaseConfig();
     case "marker_replace":
-      return { ...defaultMarkerPatternConfig(), replacement: "" };
+      return { ...defaultMarkerBaseConfig(), replacement: "" };
     default:
       return {};
   }
@@ -172,14 +175,18 @@ function parseCustomPatterns(raw: unknown): string[] {
   return [];
 }
 
-function MarkerPatternConfigFields({
+function MarkerConfigFields({
   c,
   set,
+  showSplitOptions = false,
   showReplacement = false,
+  hint = UI.cfgMarkerActionHint,
 }: {
   c: Record<string, unknown>;
   set: (patch: Record<string, unknown>) => void;
+  showSplitOptions?: boolean;
   showReplacement?: boolean;
+  hint?: string;
 }) {
   const presets = Array.isArray(c.presets)
     ? (c.presets as string[]).map((s) => String(s))
@@ -194,11 +201,16 @@ function MarkerPatternConfigFields({
       next.delete(value);
     }
     const ordered = MARKER_PRESET_OPTIONS.map((o) => o.value).filter((v) => next.has(v));
-    set({ presets: ordered.length > 0 ? ordered : [...DEFAULT_MARKER_PRESETS] });
+    set({ presets: ordered });
   };
 
   return (
     <div className="field-stack field-stack--block">
+      <label className="field-stack field-stack--block">
+        <span className="label-text">{UI.cfgMarkerLiteral}</span>
+        <input value={String(c.literal ?? "")} onChange={(e) => set({ literal: e.target.value })} />
+      </label>
+      <p className="muted pipeline-config-hint">{UI.cfgMarkerLiteralHint}</p>
       <div className="field-stack">
         <span className="label-text">{UI.cfgMarkerPresets}</span>
         <div className="pipeline-check-row">
@@ -230,6 +242,34 @@ function MarkerPatternConfigFields({
         />
         <span>{UI.cfgMarkerIncludeEmpty}</span>
       </label>
+      {showSplitOptions ? (
+        <div className="pipeline-check-row">
+          <label className="field-inline-check">
+            <input
+              type="checkbox"
+              checked={Boolean(c.delete_literal ?? true)}
+              onChange={(e) => set({ delete_literal: e.target.checked })}
+            />
+            <span>{UI.cfgMarkerDeleteLiteral}</span>
+          </label>
+          <label className="field-inline-check">
+            <input
+              type="checkbox"
+              checked={Boolean(c.trim_part_start ?? true)}
+              onChange={(e) => set({ trim_part_start: e.target.checked })}
+            />
+            <span>{UI.cfgMarkerTrimPartStart}</span>
+          </label>
+          <label className="field-inline-check">
+            <input
+              type="checkbox"
+              checked={Boolean(c.trim_part_end ?? true)}
+              onChange={(e) => set({ trim_part_end: e.target.checked })}
+            />
+            <span>{UI.cfgMarkerTrimPartEnd}</span>
+          </label>
+        </div>
+      ) : null}
       {showReplacement ? (
         <label className="field-stack field-stack--block">
           <span className="label-text">{UI.cfgMarkerReplacement}</span>
@@ -239,7 +279,7 @@ function MarkerPatternConfigFields({
           />
         </label>
       ) : null}
-      <p className="muted pipeline-config-hint">{UI.cfgMarkerPatternHint}</p>
+      <p className="muted pipeline-config-hint">{hint}</p>
     </div>
   );
 }
@@ -440,11 +480,11 @@ function LocateConfigFields({
       ) : null}
       {mtype === "marker" ? (
         <>
-          <MarkerPatternConfigFields
+          <MarkerConfigFields
             c={matcher}
             set={(patch) => setMatcher({ ...matcher, ...patch })}
+            hint={UI.cfgMarkerLocateHint}
           />
-          <p className="muted pipeline-config-hint">{UI.cfgMarkerLocateHint}</p>
         </>
       ) : null}
 
@@ -497,6 +537,7 @@ function LocateConfigFields({
         ) : null}
       </div>
       <p className="muted pipeline-config-hint">{UI.locateStepHint}</p>
+      <p className="muted pipeline-config-hint">{UI.locateMultiHint}</p>
     </div>
   );
 }
@@ -661,41 +702,7 @@ function ModuleConfigFields({
         </div>
       );
     case "marker_split":
-      return (
-        <div className="field-stack field-stack--block">
-          <label className="field-stack field-stack--block">
-            <span className="label-text">{UI.cfgMarkerLiteral}</span>
-            <input value={String(c.literal ?? "")} onChange={(e) => set({ literal: e.target.value })} />
-          </label>
-          <div className="pipeline-check-row">
-            <label className="field-inline-check">
-              <input
-                type="checkbox"
-                checked={Boolean(c.delete_literal ?? true)}
-                onChange={(e) => set({ delete_literal: e.target.checked })}
-              />
-              <span>{UI.cfgMarkerDeleteLiteral}</span>
-            </label>
-            <label className="field-inline-check">
-              <input
-                type="checkbox"
-                checked={Boolean(c.trim_part_start ?? true)}
-                onChange={(e) => set({ trim_part_start: e.target.checked })}
-              />
-              <span>{UI.cfgMarkerTrimPartStart}</span>
-            </label>
-            <label className="field-inline-check">
-              <input
-                type="checkbox"
-                checked={Boolean(c.trim_part_end ?? true)}
-                onChange={(e) => set({ trim_part_end: e.target.checked })}
-              />
-              <span>{UI.cfgMarkerTrimPartEnd}</span>
-            </label>
-          </div>
-          <p className="muted pipeline-config-hint">{UI.cfgMarkerSplitHint}</p>
-        </div>
-      );
+      return <MarkerConfigFields c={c} set={set} showSplitOptions hint={UI.cfgMarkerSplitHint} />;
     case "guard":
       return (
         <GuardConfigFields
@@ -709,9 +716,9 @@ function ModuleConfigFields({
       return <LocateConfigFields config={c} set={set} />;
     case "marker_block":
     case "marker_delete":
-      return <MarkerPatternConfigFields c={c} set={set} />;
+      return <MarkerConfigFields c={c} set={set} />;
     case "marker_replace":
-      return <MarkerPatternConfigFields c={c} set={set} showReplacement />;
+      return <MarkerConfigFields c={c} set={set} showReplacement />;
     default:
       return <p className="muted">{UI.cfgNone}</p>;
   }

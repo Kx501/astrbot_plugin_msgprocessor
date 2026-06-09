@@ -125,7 +125,7 @@ export const UI = {
   guardHint:
     "每条 guard 一种运算（日期 / 数值比大小）。需先圈定文本范围时用「划定作用域」；组合逻辑可串联 guard 或 goto。",
   locateStepHint:
-    "仅在需要局部处理时出现。划定消息中的工作区；未命中则跳过直至下一步「划定作用域」。无此步骤时，后续模块作用于整段消息。",
+    "仅在需要局部处理时出现。划定工作区；未命中则跳过直至下一步「划定作用域」。无此步骤时，后续模块作用于整段消息。",
 
   stepLabelField: "步骤标识",
   stepLabelAuto: (label: string) => label,
@@ -133,7 +133,7 @@ export const UI = {
   cfgFrom: "查找",
   cfgTo: "替换为",
   cfgDeleteFrom: "要删除的原文（全部匹配）",
-  cfgReplaceRegex: "在作用域内按正则替换",
+  cfgReplaceRegex: "正则替换",
   cfgRegexFlags: "正则标志（逗号分隔）",
   cfgPrefix: "前方拼接内容",
   cfgText: "后方拼接内容",
@@ -142,11 +142,11 @@ export const UI = {
   cfgTranslateLlmHint:
     "译向与提示词在插件配置中设置；测试时仅展示回退标记。",
   cfgMarkerLiteral: "字面量标记",
+  cfgMarkerLiteralHint: "可选。如 ---；分割必填，其它模块可与预设并用。支持转义 \\n、\\t、\\\\。",
   cfgMarkerDeleteLiteral: "拆分时删除标记",
   cfgMarkerTrimPartStart: "清理段首换行",
   cfgMarkerTrimPartEnd: "清理段尾换行",
-  cfgMarkerSplitHint:
-    "在标记点将当前作用域拆为多条待发消息。字面量标记如 ---；支持转义 \\n、\\t、\\\\。",
+  cfgMarkerSplitHint: "在字面量标记点拆为多条待发消息。",
   cfgNone: "此模块无额外参数",
   cfgMarkerPresets: "模式标记预设",
   cfgMarkerPresetBracket: "方括号 […]",
@@ -157,10 +157,11 @@ export const UI = {
   cfgMarkerCustomPatterns: "自定义模式正则（每行一条）",
   cfgMarkerIncludeEmpty: "包含空标记（如 []、{{}}）",
   cfgMarkerReplacement: "替换为",
-  cfgMarkerPatternHint:
-    "在标记点处理：按预设或正则找到模式标记后拦截、删除或替换。与「标记分割」共用同一套模式配置思路。",
-  cfgMarkerLocateHint:
-    "每个模式标记区间为一段工作区，便于后续步骤只处理标记片段。",
+  cfgMarkerActionHint:
+    "标记配置各模块共用：字面量标记 + 模式预设/正则。在标记点拦截、删除或替换。",
+  cfgMarkerLocateHint: "每个标记区间为一段工作区，便于后续步骤只处理标记片段。",
+  locateMultiHint:
+    "多个「划定作用域」按顺序执行：每一步都在上一步处理后的整条消息上重新定位，不是嵌套递进。",
 
   moduleLabel: "模块类型",
   addModule: "添加处理步骤",

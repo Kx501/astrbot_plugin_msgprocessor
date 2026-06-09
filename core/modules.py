@@ -11,12 +11,7 @@ from typing import Any, Callable
 
 from .conditions import eval_condition
 from .models import MatchHit, ModuleResult, ProcessingContext
-from .markers import (
-    delete_pattern_markers,
-    has_pattern_markers,
-    replace_pattern_markers,
-    split_by_literal_marker,
-)
+from .markers import delete_markers, has_markers, replace_markers, split_by_literal_marker
 
 ModuleFn = Callable[[str, dict[str, Any], ProcessingContext, MatchHit | None], ModuleResult]
 
@@ -118,14 +113,6 @@ def mod_prepend(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: Mat
     return ModuleResult(prefix + text)
 
 
-def _pattern_marker_cfg(cfg: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "presets": cfg.get("presets"),
-        "custom_patterns": cfg.get("custom_patterns"),
-        "include_empty": cfg.get("include_empty", True),
-    }
-
-
 def mod_marker_split(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
     """按字面量标记将当前作用域拆为多条待发消息。"""
     _ = ctx, hit
@@ -136,24 +123,24 @@ def mod_marker_split(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit
 
 
 def mod_marker_block(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """当前作用域含模式标记时拦截发送。"""
+    """当前工作区含配置的标记时拦截发送。"""
     _ = ctx, hit
-    if has_pattern_markers(text, _pattern_marker_cfg(cfg)):
+    if has_markers(text, cfg):
         return ModuleResult(text="", drop=True)
     return ModuleResult(text)
 
 
 def mod_marker_delete(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """删除当前作用域内的模式标记片段。"""
+    """删除当前工作区内的标记片段。"""
     _ = ctx, hit
-    return ModuleResult(delete_pattern_markers(text, _pattern_marker_cfg(cfg)))
+    return ModuleResult(delete_markers(text, cfg))
 
 
 def mod_marker_replace(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """将模式标记替换为配置的 fallback 文案。"""
+    """将标记片段替换为配置的 fallback 文案。"""
     _ = ctx, hit
     replacement = str(cfg.get("replacement", ""))
-    return ModuleResult(replace_pattern_markers(text, _pattern_marker_cfg(cfg), replacement=replacement))
+    return ModuleResult(replace_markers(text, cfg, replacement=replacement))
 
 
 def mod_delete(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:

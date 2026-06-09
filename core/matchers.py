@@ -7,7 +7,7 @@ from functools import lru_cache
 from typing import Any
 
 from .models import MatchHit, Span
-from .markers import scan_pattern_markers
+from .markers import scan_markers
 from .window import resolve_window
 
 
@@ -133,7 +133,7 @@ def find_hits_marker(
     max_matches: int,
 ) -> list[MatchHit]:
     """每个模式标记区间为一次命中；cfg 含 presets / custom_patterns / include_empty。"""
-    spans = scan_pattern_markers(slice_text, matcher_cfg)
+    spans = scan_markers(slice_text, matcher_cfg)
     if not spans:
         return []
     unlimited = max_matches <= 0
