@@ -11,7 +11,12 @@ from typing import Any, Callable
 
 from .conditions import eval_condition
 from .models import MatchHit, ModuleResult, ProcessingContext
-from .markers import delete_markers, has_markers, replace_markers, split_by_literal_marker
+from .markers import (
+    delete_literal_marker,
+    has_literal_marker,
+    replace_literal_marker,
+    split_by_literal_marker,
+)
 
 ModuleFn = Callable[[str, dict[str, Any], ProcessingContext, MatchHit | None], ModuleResult]
 
@@ -113,34 +118,33 @@ def mod_prepend(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: Mat
     return ModuleResult(prefix + text)
 
 
-def mod_marker_split(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """按字面量标记将当前作用域拆为多条待发消息。"""
-    _ = ctx, hit
-    parts = split_by_literal_marker(text, cfg)
-    if len(parts) <= 1:
-        return ModuleResult(parts[0] if parts else text)
-    return ModuleResult(text=parts[0], split_parts=parts)
+_MARKER_ACTIONS = frozenset({"split", "block", "delete", "replace"})
 
 
-def mod_marker_block(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """当前工作区含配置的标记时拦截发送。"""
+def _parse_marker_action(cfg: dict[str, Any]) -> str:
+    action = str(cfg.get("action", "split")).strip().lower()
+    return action if action in _MARKER_ACTIONS else "split"
+
+
+def mod_marker(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
+    """按字面量标记处理：分割 / 拦截 / 删除 / 替换。"""
     _ = ctx, hit
-    if has_markers(text, cfg):
-        return ModuleResult(text="", drop=True)
+    action = _parse_marker_action(cfg)
+    if action == "split":
+        parts = split_by_literal_marker(text, cfg)
+        if len(parts) <= 1:
+            return ModuleResult(parts[0] if parts else text)
+        return ModuleResult(text=parts[0], split_parts=parts)
+    if action == "block":
+        if has_literal_marker(text, cfg):
+            return ModuleResult(text="", drop=True)
+        return ModuleResult(text)
+    if action == "delete":
+        return ModuleResult(delete_literal_marker(text, cfg))
+    if action == "replace":
+        replacement = str(cfg.get("replacement", ""))
+        return ModuleResult(replace_literal_marker(text, cfg, replacement=replacement))
     return ModuleResult(text)
-
-
-def mod_marker_delete(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """删除当前工作区内的标记片段。"""
-    _ = ctx, hit
-    return ModuleResult(delete_markers(text, cfg))
-
-
-def mod_marker_replace(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """将标记片段替换为配置的 fallback 文案。"""
-    _ = ctx, hit
-    replacement = str(cfg.get("replacement", ""))
-    return ModuleResult(replace_markers(text, cfg, replacement=replacement))
 
 
 def mod_delete(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
@@ -162,10 +166,7 @@ BUILTIN_MODULES: dict[str, ModuleFn] = {
     "prepend": mod_prepend,
     "append": mod_append,
     "guard": mod_guard,
-    "marker_split": mod_marker_split,
-    "marker_block": mod_marker_block,
-    "marker_delete": mod_marker_delete,
-    "marker_replace": mod_marker_replace,
+    "marker": mod_marker,
 }
 
 

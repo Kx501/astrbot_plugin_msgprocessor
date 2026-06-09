@@ -20,9 +20,9 @@ import {
   GUARD_CMP_BY_KIND,
   GUARD_DATE_OP_OPTIONS,
   GUARD_KIND_OPTIONS,
+  MARKER_ACTION_OPTIONS,
   MODULE_GROUPS,
   MODULE_OPTIONS,
-  MARKER_PRESET_OPTIONS,
   UI,
   moduleLabel,
 } from "../i18n-ui";
@@ -42,21 +42,21 @@ function emptyAnchor(): WindowAnchor {
   return { literal: "", occurrence: 0, inclusive: false };
 }
 
-const DEFAULT_MARKER_PRESETS = ["bracket", "mustache"];
-
-function defaultMarkerBaseConfig(): Record<string, unknown> {
+function defaultMarkerConfig(): Record<string, unknown> {
   return {
     literal: "",
-    presets: [...DEFAULT_MARKER_PRESETS],
-    custom_patterns: [],
-    include_empty: true,
+    action: "split",
+    delete_literal: true,
+    trim_part_start: true,
+    trim_part_end: true,
+    replacement: "",
   };
 }
 
 function markerLocateMatcherConfig(): Record<string, unknown> {
   return {
     type: "marker",
-    ...defaultMarkerBaseConfig(),
+    literal: "",
   };
 }
 
@@ -132,14 +132,10 @@ export function defaultConfig(mid: string): Record<string, unknown> {
       return { prefix: "" };
     case "delete":
       return { from: "" };
-    case "marker_split":
+    case "marker":
       return {
-        ...defaultMarkerBaseConfig(),
+        ...defaultMarkerConfig(),
         literal: "---",
-        presets: [],
-        delete_literal: true,
-        trim_part_start: true,
-        trim_part_end: true,
       };
     case "guard":
       return {
@@ -152,97 +148,52 @@ export function defaultConfig(mid: string): Record<string, unknown> {
         matcher: { type: "simple", op: "contains", value: "", ignore_case: false },
         region: { kind: "match" },
       };
-    case "marker_block":
-    case "marker_delete":
-      return defaultMarkerBaseConfig();
-    case "marker_replace":
-      return { ...defaultMarkerBaseConfig(), replacement: "" };
     default:
       return {};
   }
 }
 
-function parseCustomPatterns(raw: unknown): string[] {
-  if (Array.isArray(raw)) {
-    return raw.map((s) => String(s).trim()).filter(Boolean);
-  }
-  if (typeof raw === "string") {
-    return raw
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
-  return [];
-}
-
-function MarkerConfigFields({
+function MarkerLiteralField({
   c,
   set,
-  showSplitOptions = false,
-  showReplacement = false,
-  hint = UI.cfgMarkerActionHint,
 }: {
   c: Record<string, unknown>;
   set: (patch: Record<string, unknown>) => void;
-  showSplitOptions?: boolean;
-  showReplacement?: boolean;
-  hint?: string;
 }) {
-  const presets = Array.isArray(c.presets)
-    ? (c.presets as string[]).map((s) => String(s))
-    : [...DEFAULT_MARKER_PRESETS];
-  const customText = parseCustomPatterns(c.custom_patterns).join("\n");
-
-  const togglePreset = (value: string, checked: boolean) => {
-    const next = new Set(presets);
-    if (checked) {
-      next.add(value);
-    } else {
-      next.delete(value);
-    }
-    const ordered = MARKER_PRESET_OPTIONS.map((o) => o.value).filter((v) => next.has(v));
-    set({ presets: ordered });
-  };
-
   return (
-    <div className="field-stack field-stack--block">
+    <>
       <label className="field-stack field-stack--block">
         <span className="label-text">{UI.cfgMarkerLiteral}</span>
         <input value={String(c.literal ?? "")} onChange={(e) => set({ literal: e.target.value })} />
       </label>
       <p className="muted pipeline-config-hint">{UI.cfgMarkerLiteralHint}</p>
-      <div className="field-stack">
-        <span className="label-text">{UI.cfgMarkerPresets}</span>
-        <div className="pipeline-check-row">
-          {MARKER_PRESET_OPTIONS.map((o) => (
-            <label key={o.value} className="field-inline-check">
-              <input
-                type="checkbox"
-                checked={presets.includes(o.value)}
-                onChange={(e) => togglePreset(o.value, e.target.checked)}
-              />
-              <span>{o.label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
+    </>
+  );
+}
+
+function MarkerModuleFields({
+  c,
+  set,
+}: {
+  c: Record<string, unknown>;
+  set: (patch: Record<string, unknown>) => void;
+}) {
+  const action = String(c.action ?? "split");
+
+  return (
+    <div className="field-stack field-stack--block">
+      <MarkerLiteralField c={c} set={set} />
       <label className="field-stack field-stack--block">
-        <span className="label-text">{UI.cfgMarkerCustomPatterns}</span>
-        <textarea
-          rows={3}
-          value={customText}
-          onChange={(e) => set({ custom_patterns: parseCustomPatterns(e.target.value) })}
-        />
+        <span className="label-text">{UI.markerAction}</span>
+        <select value={action} onChange={(e) => set({ action: e.target.value })}>
+          {MARKER_ACTION_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
       </label>
-      <label className="field-inline-check">
-        <input
-          type="checkbox"
-          checked={Boolean(c.include_empty ?? true)}
-          onChange={(e) => set({ include_empty: e.target.checked })}
-        />
-        <span>{UI.cfgMarkerIncludeEmpty}</span>
-      </label>
-      {showSplitOptions ? (
+      {action === "split" ? (
         <div className="pipeline-check-row">
           <label className="field-inline-check">
             <input
@@ -270,7 +221,7 @@ function MarkerConfigFields({
           </label>
         </div>
       ) : null}
-      {showReplacement ? (
+      {action === "replace" ? (
         <label className="field-stack field-stack--block">
           <span className="label-text">{UI.cfgMarkerReplacement}</span>
           <input
@@ -279,7 +230,7 @@ function MarkerConfigFields({
           />
         </label>
       ) : null}
-      <p className="muted pipeline-config-hint">{hint}</p>
+      <p className="muted pipeline-config-hint">{UI.cfgMarkerHint}</p>
     </div>
   );
 }
@@ -479,13 +430,10 @@ function LocateConfigFields({
         </div>
       ) : null}
       {mtype === "marker" ? (
-        <>
-          <MarkerConfigFields
-            c={matcher}
-            set={(patch) => setMatcher({ ...matcher, ...patch })}
-            hint={UI.cfgMarkerLocateHint}
-          />
-        </>
+        <div className="field-stack field-stack--block">
+          <MarkerLiteralField c={matcher} set={(patch) => setMatcher({ ...matcher, ...patch })} />
+          <p className="muted pipeline-config-hint">{UI.cfgMarkerLocateHint}</p>
+        </div>
       ) : null}
 
       <div className="form-grid-region step-match-region">
@@ -701,8 +649,8 @@ function ModuleConfigFields({
           </label>
         </div>
       );
-    case "marker_split":
-      return <MarkerConfigFields c={c} set={set} showSplitOptions hint={UI.cfgMarkerSplitHint} />;
+    case "marker":
+      return <MarkerModuleFields c={c} set={set} />;
     case "guard":
       return (
         <GuardConfigFields
@@ -714,11 +662,6 @@ function ModuleConfigFields({
       );
     case "locate":
       return <LocateConfigFields config={c} set={set} />;
-    case "marker_block":
-    case "marker_delete":
-      return <MarkerConfigFields c={c} set={set} />;
-    case "marker_replace":
-      return <MarkerConfigFields c={c} set={set} showReplacement />;
     default:
       return <p className="muted">{UI.cfgNone}</p>;
   }

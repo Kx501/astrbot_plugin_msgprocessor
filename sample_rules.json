@@ -34,8 +34,8 @@
       "priority": 9,
       "pipeline": [
         {
-          "id": "marker_split",
-          "config": { "literal": "---", "delete_literal": true }
+          "id": "marker",
+          "config": { "literal": "---", "action": "split", "delete_literal": true }
         }
       ]
     },
@@ -182,12 +182,8 @@
       "priority": 15,
       "pipeline": [
         {
-          "id": "marker_block",
-          "config": {
-            "presets": ["bracket", "mustache"],
-            "custom_patterns": [],
-            "include_empty": true
-          }
+          "id": "marker",
+          "config": { "literal": "【待填】", "action": "block" }
         }
       ]
     },
@@ -197,11 +193,10 @@
       "priority": 6,
       "pipeline": [
         {
-          "id": "marker_replace",
+          "id": "marker",
           "config": {
-            "presets": ["bracket", "mustache"],
-            "custom_patterns": [],
-            "include_empty": false,
+            "literal": "【待填】",
+            "action": "replace",
             "replacement": "（待填）"
           }
         }
@@ -225,12 +220,8 @@
           }
         },
         {
-          "id": "marker_delete",
-          "config": {
-            "presets": ["bracket", "mustache"],
-            "custom_patterns": [],
-            "include_empty": true
-          }
+          "id": "marker",
+          "config": { "literal": "[待填]", "action": "delete" }
         }
       ]
     }
