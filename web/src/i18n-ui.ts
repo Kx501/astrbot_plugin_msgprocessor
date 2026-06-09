@@ -85,7 +85,7 @@ export const UI = {
   moduleGuard: "条件守卫",
   moduleLocate: "划定作用域",
   moduleGroupGeneral: "通用",
-  moduleGroupPlaceholder: "占位符",
+  moduleGroupPlaceholder: "标记与占位符",
   modulePlaceholderBlock: "占位符拦截",
   modulePlaceholderDelete: "占位符删除",
   modulePlaceholderReplace: "占位符替换",
@@ -219,15 +219,15 @@ export const PLACEHOLDER_PRESET_OPTIONS: { value: string; label: string }[] = [
 export type ModuleOption = { value: string; label: string; group?: string };
 
 export const MODULE_OPTIONS: ModuleOption[] = [
-  { value: "locate", label: UI.moduleLocate, group: "general" },
   { value: "noop", label: UI.moduleNoop, group: "general" },
+  { value: "locate", label: UI.moduleLocate, group: "general" },
   { value: "replace", label: UI.moduleReplace, group: "general" },
   { value: "delete", label: UI.moduleDelete, group: "general" },
   { value: "translate_llm", label: UI.moduleTranslateLlm, group: "general" },
   { value: "prepend", label: UI.modulePrepend, group: "general" },
   { value: "append", label: UI.moduleAppend, group: "general" },
-  { value: "split", label: UI.moduleSplit, group: "general" },
   { value: "guard", label: UI.moduleGuard, group: "general" },
+  { value: "split", label: UI.moduleSplit, group: "placeholder" },
   { value: "placeholder_block", label: UI.modulePlaceholderBlock, group: "placeholder" },
   { value: "placeholder_delete", label: UI.modulePlaceholderDelete, group: "placeholder" },
   { value: "placeholder_replace", label: UI.modulePlaceholderReplace, group: "placeholder" },
