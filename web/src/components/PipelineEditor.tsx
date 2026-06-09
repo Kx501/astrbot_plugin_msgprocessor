@@ -230,7 +230,6 @@ function MarkerModuleFields({
           />
         </label>
       ) : null}
-      <p className="muted pipeline-config-hint">{UI.cfgMarkerHint}</p>
     </div>
   );
 }
@@ -505,7 +504,7 @@ function SortableRow({
     id: step._key,
   });
   const style: CSSProperties = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Translate.toString(transform),
     transition,
     opacity: isDragging ? 0.88 : 1,
   };

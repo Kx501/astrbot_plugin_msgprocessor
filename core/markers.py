@@ -48,20 +48,6 @@ def has_literal_marker(text: str, cfg: dict[str, Any]) -> bool:
     return bool(literal) and literal in text
 
 
-def delete_literal_marker(text: str, cfg: dict[str, Any]) -> str:
-    literal = parse_literal(cfg)
-    if not literal:
-        return text
-    return text.replace(literal, "")
-
-
-def replace_literal_marker(text: str, cfg: dict[str, Any], *, replacement: str) -> str:
-    literal = parse_literal(cfg)
-    if not literal:
-        return text
-    return text.replace(literal, replacement)
-
-
 def _trim_split_parts(parts: list[str], *, trim_start: bool, trim_end: bool) -> list[str]:
     out: list[str] = []
     for i, part in enumerate(parts):

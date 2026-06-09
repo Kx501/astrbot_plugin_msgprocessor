@@ -11,12 +11,7 @@ from typing import Any, Callable
 
 from .conditions import eval_condition
 from .models import MatchHit, ModuleResult, ProcessingContext
-from .markers import (
-    delete_literal_marker,
-    has_literal_marker,
-    replace_literal_marker,
-    split_by_literal_marker,
-)
+from .markers import has_literal_marker, split_by_literal_marker
 
 ModuleFn = Callable[[str, dict[str, Any], ProcessingContext, MatchHit | None], ModuleResult]
 
@@ -127,7 +122,7 @@ def _parse_marker_action(cfg: dict[str, Any]) -> str:
 
 
 def mod_marker(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
-    """按字面量标记处理：分割 / 拦截 / 删除 / 替换。"""
+    """按字面量标记处理：分割 / 含标记时拦截、删除或替换整段工作区文本。"""
     _ = ctx, hit
     action = _parse_marker_action(cfg)
     if action == "split":
@@ -140,10 +135,14 @@ def mod_marker(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: Matc
             return ModuleResult(text="", drop=True)
         return ModuleResult(text)
     if action == "delete":
-        return ModuleResult(delete_literal_marker(text, cfg))
+        if has_literal_marker(text, cfg):
+            return ModuleResult("")
+        return ModuleResult(text)
     if action == "replace":
-        replacement = str(cfg.get("replacement", ""))
-        return ModuleResult(replace_literal_marker(text, cfg, replacement=replacement))
+        if has_literal_marker(text, cfg):
+            replacement = str(cfg.get("replacement", ""))
+            return ModuleResult(replacement)
+        return ModuleResult(text)
     return ModuleResult(text)
 
 

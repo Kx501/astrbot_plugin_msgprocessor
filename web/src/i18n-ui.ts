@@ -89,8 +89,8 @@ export const UI = {
   markerAction: "处理方式",
   markerActionSplit: "分割为多条消息",
   markerActionBlock: "含标记时拦截发送",
-  markerActionDelete: "删除标记",
-  markerActionReplace: "替换标记",
+  markerActionDelete: "含标记时删除整段",
+  markerActionReplace: "含标记时替换整段",
 
   guardWhenTrue: "条件成立时",
   guardWhenFalse: "条件不成立时",
@@ -144,13 +144,11 @@ export const UI = {
   cfgTranslateLlmHint:
     "译向与提示词在插件配置中设置；测试时仅展示回退标记。",
   cfgMarkerLiteral: "字面量标记",
-  cfgMarkerLiteralHint: "固定字符串，如 ---、【待填】。支持转义 \\n、\\t、\\\\。形态占位符请用「替换」模块的正则。",
+  cfgMarkerLiteralHint: "固定字符串，如 ---、【待填】。支持转义 \\n、\\t、\\\\。",
   cfgMarkerDeleteLiteral: "拆分时删除标记",
   cfgMarkerTrimPartStart: "清理段首换行",
   cfgMarkerTrimPartEnd: "清理段尾换行",
-  cfgMarkerHint:
-    "按字面量标记处理当前工作区。需匹配 […]、{{…}} 等可变形态时，请用「替换」模块并勾选正则。",
-  cfgMarkerReplacement: "替换为",
+  cfgMarkerReplacement: "整段替换为",
   cfgMarkerLocateHint: "每次字面量出现位置为一段工作区，便于后续步骤只处理该片段。",
   cfgNone: "此模块无额外参数",
   locateMultiHint:
