@@ -186,12 +186,21 @@ def _eval_regex_op(op: str, text: str, cfg: dict[str, Any]) -> bool:
 
 
 def _compare_op_parts(op: str) -> tuple[str, str] | None:
-    if not op.startswith("number_"):
-        return None
-    cmp_key = op[len("number_") :]
-    if cmp_key in _COMPARATORS:
-        return "number", cmp_key
+    for prefix, kind in (("number_", "number"), ("length_", "length")):
+        if not op.startswith(prefix):
+            continue
+        cmp_key = op[len(prefix) :]
+        if cmp_key in _COMPARATORS:
+            return kind, cmp_key
     return None
+
+
+def _text_length(text: str, cfg: dict[str, Any]) -> int:
+    """当前工作区字数；``count`` 可选 ``chars``（默认）或 ``chars_no_ws``（忽略空白）。"""
+    mode = str(cfg.get("count") or "chars").strip().lower()
+    if mode == "chars_no_ws":
+        return len(re.sub(r"\s+", "", text))
+    return len(text)
 
 
 def eval_condition(text: str, cfg: dict[str, Any]) -> bool:
@@ -221,5 +230,7 @@ def eval_condition(text: str, cfg: dict[str, Any]) -> bool:
             if parsed is None:
                 return _flag_true(cfg.get("if_missing"))
             return fn(parsed, threshold)
+        if kind == "length":
+            return fn(float(_text_length(source, cfg)), threshold)
 
     return False

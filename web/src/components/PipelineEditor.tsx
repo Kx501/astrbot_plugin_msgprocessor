@@ -20,6 +20,7 @@ import {
   GUARD_CMP_BY_KIND,
   GUARD_DATE_OP_OPTIONS,
   GUARD_KIND_OPTIONS,
+  GUARD_LENGTH_COUNT_OPTIONS,
   GUARD_REGEX_OP_OPTIONS,
   MARKER_ACTION_OPTIONS,
   MODULE_GROUPS,
@@ -78,7 +79,7 @@ function pipelineGotoLabels(pipeline: PipelineStepUI[], excludeKey: string): str
   return out;
 }
 
-type GuardKind = "date" | "number" | "regex";
+type GuardKind = "date" | "number" | "length" | "regex";
 type GuardNumberCmp = "gt" | "gte" | "lt" | "lte" | "eq" | "ne";
 type GuardDateOp = "date_before_at" | "date_after_at" | "date_within_days" | "date_outside_days";
 type GuardRegexOp = "regex_search" | "regex_match";
@@ -97,6 +98,7 @@ function isGuardRegexOp(op: string): op is GuardRegexOp {
 function parseGuardOp(op: string): {
   kind: GuardKind;
   numberCmp: GuardNumberCmp;
+  lengthCmp: GuardNumberCmp;
   dateOp: GuardDateOp;
   regexOp: GuardRegexOp;
 } {
@@ -104,6 +106,16 @@ function parseGuardOp(op: string): {
     return {
       kind: "number",
       numberCmp: op.slice("number_".length) as GuardNumberCmp,
+      lengthCmp: "gt",
+      dateOp: "date_outside_days",
+      regexOp: "regex_search",
+    };
+  }
+  if (op.startsWith("length_")) {
+    return {
+      kind: "length",
+      numberCmp: "gt",
+      lengthCmp: op.slice("length_".length) as GuardNumberCmp,
       dateOp: "date_outside_days",
       regexOp: "regex_search",
     };
@@ -112,6 +124,7 @@ function parseGuardOp(op: string): {
     return {
       kind: "regex",
       numberCmp: "gt",
+      lengthCmp: "gt",
       dateOp: "date_outside_days",
       regexOp: op,
     };
@@ -119,6 +132,7 @@ function parseGuardOp(op: string): {
   return {
     kind: "date",
     numberCmp: "gt",
+    lengthCmp: "gt",
     dateOp: isGuardDateOp(op) ? op : "date_outside_days",
     regexOp: "regex_search",
   };
@@ -138,6 +152,9 @@ function guardDefaults(op: string): Record<string, unknown> {
   }
   if (op.startsWith("number_")) {
     return { ...base, value: 0, regex: "", if_missing: "false" };
+  }
+  if (op.startsWith("length_")) {
+    return { ...base, value: 0, count: "chars" };
   }
   if (op === "regex_search" || op === "regex_match") {
     return { ...base, op, pattern: "", regex_flags: "", if_no_match: "false" };
@@ -784,9 +801,10 @@ function GuardConfigFields({
   stepKey: string;
 }) {
   const op = String(c.op ?? "date_outside_days");
-  const { kind, numberCmp, dateOp, regexOp } = parseGuardOp(op);
+  const { kind, numberCmp, lengthCmp, dateOp, regexOp } = parseGuardOp(op);
   const isDate = kind === "date";
   const isNumber = kind === "number";
+  const isLength = kind === "length";
   const isRegex = kind === "regex";
   const isDaysDate = isDate && (dateOp === "date_within_days" || dateOp === "date_outside_days");
   const isAnchorDate = isDate && (dateOp === "date_before_at" || dateOp === "date_after_at");
@@ -807,7 +825,9 @@ function GuardConfigFields({
                   ? "date_outside_days"
                   : nextKind === "regex"
                     ? "regex_search"
-                    : "number_gt";
+                    : nextKind === "length"
+                      ? "length_gt"
+                      : "number_gt";
               set({
                 ...guardDefaults(nextOp),
                 when_true: c.when_true ?? "pass",
@@ -855,6 +875,19 @@ function GuardConfigFields({
               }}
             >
               {GUARD_REGEX_OP_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          ) : isLength ? (
+            <select
+              value={lengthCmp}
+              onChange={(e) => {
+                set({ op: `length_${e.target.value as GuardNumberCmp}` });
+              }}
+            >
+              {(GUARD_CMP_BY_KIND.length ?? []).map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
@@ -920,6 +953,33 @@ function GuardConfigFields({
               onChange={(e) => set({ if_no_date: e.target.checked ? "true" : "false" })}
             />
             <span>{UI.guardCondIfNoDate}</span>
+          </label>
+        </>
+      )}
+      {isLength && (
+        <>
+          <label className="field-stack">
+            <span className="label-text">{UI.guardCondLengthThreshold}</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={String(c.value ?? 0)}
+              onChange={(e) => set({ value: Number(e.target.value) })}
+            />
+          </label>
+          <label className="field-stack">
+            <span className="label-text">{UI.guardCondLengthCount}</span>
+            <select
+              value={String(c.count ?? "chars")}
+              onChange={(e) => set({ count: e.target.value })}
+            >
+              {GUARD_LENGTH_COUNT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </label>
         </>
       )}

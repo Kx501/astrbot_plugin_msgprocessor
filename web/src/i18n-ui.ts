@@ -107,7 +107,12 @@ export const UI = {
   guardCondCmp: "比较方式",
   guardCondKindDate: "日期",
   guardCondKindNumber: "数值",
+  guardCondKindLength: "字数",
   guardCondKindRegex: "正则",
+  guardCondLengthCount: "计数方式",
+  guardCondLengthCountChars: "全部字符（含空白）",
+  guardCondLengthCountCharsNoWs: "忽略空白字符",
+  guardCondLengthThreshold: "字数阈值",
   guardCondCmpRegexSearch: "任意匹配",
   guardCondCmpRegexMatch: "全文匹配",
   guardCondRegexPattern: "正则模式",
@@ -131,7 +136,7 @@ export const UI = {
   guardCondIfNoDate: "未找到日期时视为成立",
   guardCondIfMissing: "未找到数值时视为成立",
   guardHint:
-    "每条 guard 一种运算（日期 / 数值比大小）。需先圈定文本范围时用「划定作用域」；组合逻辑可串联 guard 或 goto。",
+    "组合逻辑可串联 guard 或 goto。",
   locateStepHint:
     "仅在需要局部处理时出现。划定工作区；未命中则跳过直至下一步「划定作用域」。无此步骤时，后续模块作用于整段消息。",
 
@@ -182,9 +187,15 @@ export const UI = {
   scrollToTop: "回到顶部",
 } as const;
 
+export const GUARD_LENGTH_COUNT_OPTIONS: { value: string; label: string }[] = [
+  { value: "chars", label: UI.guardCondLengthCountChars },
+  { value: "chars_no_ws", label: UI.guardCondLengthCountCharsNoWs },
+];
+
 export const GUARD_KIND_OPTIONS: { value: string; label: string }[] = [
   { value: "date", label: UI.guardCondKindDate },
   { value: "number", label: UI.guardCondKindNumber },
+  { value: "length", label: UI.guardCondKindLength },
   { value: "regex", label: UI.guardCondKindRegex },
 ];
 
@@ -211,6 +222,7 @@ export const GUARD_DATE_OP_OPTIONS: { value: string; label: string }[] = [
 
 export const GUARD_CMP_BY_KIND: Record<string, { value: string; label: string }[]> = {
   number: GUARD_CMP_COMMON,
+  length: GUARD_CMP_COMMON,
 };
 
 export const MARKER_ACTION_OPTIONS: { value: string; label: string }[] = [
