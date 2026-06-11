@@ -100,6 +100,12 @@ def translate_llm_fallback(text: str, cfg: dict[str, Any]) -> str:
     return prefix + text
 
 
+def review_llm_fallback(text: str, cfg: dict[str, Any]) -> str:
+    """未注入 AI 二审或调用失败时的回退：保持原文。"""
+    _ = cfg
+    return text
+
+
 def mod_append(text: str, cfg: dict[str, Any], ctx: ProcessingContext, hit: MatchHit | None) -> ModuleResult:
     _ = ctx, hit
     suffix = _unescape_config_literal(str(cfg.get("text", "")))

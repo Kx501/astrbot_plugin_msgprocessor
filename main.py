@@ -19,7 +19,8 @@ from astrbot.api.star import Context, Star, StarTools
 from .core.config import build_config, parse_delay_policy
 from .core.engine import process_message_async
 from .core.loader import load_rules_from_path
-from .core.modules import translate_llm_fallback
+from .core.modules import review_llm_fallback, translate_llm_fallback
+from .core.prompts import render_llm_prompt, resolve_step_prompt
 from .core.outbound import plain_char_count, send_follow_ups
 from .core.server import create_app
 
@@ -32,8 +33,8 @@ _star_ref: Any = None
 _EXTRA_PENDING = "_mp_pending_batches"
 
 
-def _llm_provider(cfg: dict[str, Any]) -> tuple[bool, str | None]:
-    raw = cfg.get("translate_llm", "default")
+def _llm_provider(cfg: dict[str, Any], key: str) -> tuple[bool, str | None]:
+    raw = cfg.get(key, "default")
     s = "" if raw is None else str(raw).strip()
     if not s:
         return False, None
@@ -42,11 +43,13 @@ def _llm_provider(cfg: dict[str, Any]) -> tuple[bool, str | None]:
     return True, s
 
 
-def _translate_prompt(instruction: str, text: str) -> str:
-    head = (instruction or "").strip()
-    if not head:
-        head = "请将以下文本翻译成中文，只输出译文，不要解释。"
-    return f"{head}\n\n{text}"
+_DEFAULT_TRANSLATE_PROMPT = "请将以下文本翻译成中文，只输出译文，不要解释。"
+_DEFAULT_REVIEW_PROMPT = (
+    "以下是即将发到聊天平台的回复。若含连续空行：\n"
+    "- 若是文章/长文排版，保持原样\n"
+    "- 若是日常闲聊且应分多条发送，用单独一行的 --- 分隔各段，去掉多余空行\n"
+    "只输出修正后正文。\n\n{{text}}"
+)
 
 
 def _plain_nonempty(comp: Any) -> bool:
@@ -96,7 +99,7 @@ def _patch_send(star: Any) -> None:
         try:
             umo = session if isinstance(session, str) else str(session)
             doc = ref._rules_doc()
-            meta = {"translate_llm": ref._translate_llm(None, proactive_umo=umo)}
+            meta = ref._llm_meta(None, proactive_umo=umo)
             first, rest, dropped = await ref._split_chain(chain, doc, meta)
             if dropped:
                 return True
@@ -256,39 +259,76 @@ class MsgProcessorStar(Star):
             return [], [], True
         return first, rest, False
 
-    def _translate_llm(
+    async def _llm_generate_text(
+        self,
+        *,
+        event: AstrMessageEvent | None,
+        proactive_umo: str | None,
+        provider_key: str,
+        prompt: str,
+    ) -> str | None:
+        use_llm, fixed_provider = _llm_provider(self._cfg, provider_key)
+        if not use_llm:
+            return None
+        ctx = self.context
+        try:
+            if fixed_provider is None:
+                if proactive_umo is not None:
+                    umo = proactive_umo
+                elif event is not None:
+                    umo = event.unified_msg_origin
+                else:
+                    return None
+                pid = await ctx.get_current_chat_provider_id(umo=umo)
+            else:
+                pid = fixed_provider
+            resp = await ctx.llm_generate(chat_provider_id=pid, prompt=prompt)
+            out = (getattr(resp, "completion_text", None) or "").strip()
+            return out or None
+        except Exception:
+            ab_logger.exception("MsgProcessor: LLM 调用失败 (%s)", provider_key)
+            return None
+
+    def _llm_meta(
         self,
         event: AstrMessageEvent | None = None,
         *,
         proactive_umo: str | None = None,
-    ):
+    ) -> dict[str, Any]:
         cfg = self._cfg
-        ctx = self.context
+        star = self
 
         async def translate(text: str, scfg: dict[str, Any], _pctx: Any, _hit: Any) -> str:
-            use_llm, fixed_provider = _llm_provider(cfg)
-            if not use_llm:
-                return translate_llm_fallback(text, scfg)
-            prompt = _translate_prompt(str(cfg.get("llm_translate_prompt") or ""), text)
-            try:
-                if fixed_provider is None:
-                    if proactive_umo is not None:
-                        umo = proactive_umo
-                    elif event is not None:
-                        umo = event.unified_msg_origin
-                    else:
-                        return translate_llm_fallback(text, scfg)
-                    pid = await ctx.get_current_chat_provider_id(umo=umo)
-                else:
-                    pid = fixed_provider
-                resp = await ctx.llm_generate(chat_provider_id=pid, prompt=prompt)
-                out = (getattr(resp, "completion_text", None) or "").strip()
-                return out if out else translate_llm_fallback(text, scfg)
-            except Exception:
-                ab_logger.exception("MsgProcessor: AI翻译失败")
-                return translate_llm_fallback(text, scfg)
+            instruction = resolve_step_prompt(
+                scfg,
+                str(cfg.get("llm_translate_prompt") or ""),
+                default=_DEFAULT_TRANSLATE_PROMPT,
+            )
+            prompt = render_llm_prompt(instruction, text)
+            out = await star._llm_generate_text(
+                event=event,
+                proactive_umo=proactive_umo,
+                provider_key="translate_llm",
+                prompt=prompt,
+            )
+            return out if out else translate_llm_fallback(text, scfg)
 
-        return translate
+        async def review(text: str, scfg: dict[str, Any], _pctx: Any, _hit: Any) -> str:
+            instruction = resolve_step_prompt(
+                scfg,
+                str(cfg.get("llm_review_prompt") or ""),
+                default=_DEFAULT_REVIEW_PROMPT,
+            )
+            prompt = render_llm_prompt(instruction, text)
+            out = await star._llm_generate_text(
+                event=event,
+                proactive_umo=proactive_umo,
+                provider_key="review_llm",
+                prompt=prompt,
+            )
+            return out if out else review_llm_fallback(text, scfg)
+
+        return {"translate_llm": translate, "review_llm": review}
 
     @filter.on_llm_response()
     async def on_llm_response(self, event: AstrMessageEvent, resp: Any) -> None:
@@ -309,7 +349,7 @@ class MsgProcessorStar(Star):
                 return
 
             doc = self._rules_doc()
-            meta = {"translate_llm": self._translate_llm(event)}
+            meta = self._llm_meta(event)
             first, rest, dropped = await self._split_chain(chain, doc, meta)
             if dropped:
                 chain.clear()

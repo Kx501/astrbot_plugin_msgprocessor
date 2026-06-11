@@ -9,10 +9,20 @@ from typing import Any
 from .matchers import find_hits
 from .models import MatchHit, ModuleResult, ProcessingContext
 from .pipeline_ids import is_locate_step
-from .modules import get_module, translate_llm_fallback
+from .modules import get_module, review_llm_fallback, translate_llm_fallback
 
-TranslateLlmSync = Callable[[str, dict[str, Any], ProcessingContext, MatchHit | None], str]
-TranslateLlmAsync = Callable[[str, dict[str, Any], ProcessingContext, MatchHit | None], Awaitable[str]]
+_LLM_STEP_IDS = frozenset({"translate_llm", "review_llm"})
+
+LlmStepSync = Callable[[str, str, dict[str, Any], ProcessingContext, MatchHit | None], str]
+LlmStepAsync = Callable[[str, str, dict[str, Any], ProcessingContext, MatchHit | None], Awaitable[str]]
+
+
+def _llm_step_fallback(mid: str, text: str, scfg: dict[str, Any]) -> str:
+    if mid == "translate_llm":
+        return translate_llm_fallback(text, scfg)
+    if mid == "review_llm":
+        return review_llm_fallback(text, scfg)
+    return text
 
 _PIPELINE_MAX_EXTRA_ITERS = 20
 
@@ -75,14 +85,14 @@ def _apply_one_module_step(
     pctx: ProcessingContext,
     hit: MatchHit | None,
     *,
-    on_translate_llm: TranslateLlmSync,
+    on_llm_step: LlmStepSync,
 ) -> ModuleResult:
     mid = st.get("id")
     if not isinstance(mid, str):
         return ModuleResult(text)
     scfg = st.get("config") if isinstance(st.get("config"), dict) else {}
-    if mid == "translate_llm":
-        return ModuleResult(on_translate_llm(text, scfg, pctx, hit))
+    if mid in _LLM_STEP_IDS:
+        return ModuleResult(on_llm_step(mid, text, scfg, pctx, hit))
     if mid == "translate_stub":
         return ModuleResult(translate_llm_fallback(text, scfg))
     fn = get_module(mid)
@@ -97,14 +107,14 @@ async def _apply_one_module_step_async(
     pctx: ProcessingContext,
     hit: MatchHit | None,
     *,
-    on_translate_llm: TranslateLlmAsync,
+    on_llm_step: LlmStepAsync,
 ) -> ModuleResult:
     mid = st.get("id")
     if not isinstance(mid, str):
         return ModuleResult(text)
     scfg = st.get("config") if isinstance(st.get("config"), dict) else {}
-    if mid == "translate_llm":
-        return ModuleResult(await on_translate_llm(text, scfg, pctx, hit))
+    if mid in _LLM_STEP_IDS:
+        return ModuleResult(await on_llm_step(mid, text, scfg, pctx, hit))
     if mid == "translate_stub":
         return ModuleResult(translate_llm_fallback(text, scfg))
     fn = get_module(mid)
@@ -162,12 +172,12 @@ def _run_parts_through_step(
     pctx: ProcessingContext,
     hit: MatchHit | None,
     *,
-    on_translate_llm: TranslateLlmSync,
+    on_llm_step: LlmStepSync,
 ) -> tuple[list[str], _StepEffect]:
     out: list[str] = []
     eff = _StepEffect()
     for part in parts:
-        res = _apply_one_module_step(part, st, pctx, hit, on_translate_llm=on_translate_llm)
+        res = _apply_one_module_step(part, st, pctx, hit, on_llm_step=on_llm_step)
         new_text, split_parts, step_eff = _consume_module_result(part, res)
         if step_eff.dropped:
             continue
@@ -192,12 +202,12 @@ async def _run_parts_through_step_async(
     pctx: ProcessingContext,
     hit: MatchHit | None,
     *,
-    on_translate_llm: TranslateLlmAsync,
+    on_llm_step: LlmStepAsync,
 ) -> tuple[list[str], _StepEffect]:
     out: list[str] = []
     eff = _StepEffect()
     for part in parts:
-        res = await _apply_one_module_step_async(part, st, pctx, hit, on_translate_llm=on_translate_llm)
+        res = await _apply_one_module_step_async(part, st, pctx, hit, on_llm_step=on_llm_step)
         new_text, split_parts, step_eff = _consume_module_result(part, res)
         if step_eff.dropped:
             continue
@@ -222,7 +232,7 @@ def _run_transform_segment(
     pctx: ProcessingContext,
     hit: MatchHit | None,
     *,
-    on_translate_llm: TranslateLlmSync,
+    on_llm_step: LlmStepSync,
 ) -> _SegmentResult:
     labels = _build_step_label_index(sub)
     split_parts: list[str] | None = None
@@ -245,7 +255,7 @@ def _run_transform_segment(
                 st,
                 pctx,
                 hit,
-                on_translate_llm=on_translate_llm,
+                on_llm_step=on_llm_step,
             )
             if step_eff.halt:
                 halt = True
@@ -258,7 +268,7 @@ def _run_transform_segment(
                 return _SegmentResult(payload=split_parts, halt=True)
             i += 1
             continue
-        res = _apply_one_module_step(region_text, st, pctx, hit, on_translate_llm=on_translate_llm)
+        res = _apply_one_module_step(region_text, st, pctx, hit, on_llm_step=on_llm_step)
         region_text, new_split, step_eff = _consume_module_result(region_text, res)
         if step_eff.dropped:
             return _SegmentResult(payload=None)
@@ -285,7 +295,7 @@ async def _run_transform_segment_async(
     pctx: ProcessingContext,
     hit: MatchHit | None,
     *,
-    on_translate_llm: TranslateLlmAsync,
+    on_llm_step: LlmStepAsync,
 ) -> _SegmentResult:
     labels = _build_step_label_index(sub)
     split_parts: list[str] | None = None
@@ -308,7 +318,7 @@ async def _run_transform_segment_async(
                 st,
                 pctx,
                 hit,
-                on_translate_llm=on_translate_llm,
+                on_llm_step=on_llm_step,
             )
             if step_eff.halt:
                 halt = True
@@ -321,7 +331,7 @@ async def _run_transform_segment_async(
                 return _SegmentResult(payload=split_parts, halt=True)
             i += 1
             continue
-        res = await _apply_one_module_step_async(region_text, st, pctx, hit, on_translate_llm=on_translate_llm)
+        res = await _apply_one_module_step_async(region_text, st, pctx, hit, on_llm_step=on_llm_step)
         region_text, new_split, step_eff = _consume_module_result(region_text, res)
         if step_eff.dropped:
             return _SegmentResult(payload=None)
@@ -396,7 +406,7 @@ def _run_locate_step(
     locate_idx: int,
     end: int,
     *,
-    on_translate_llm: TranslateLlmSync,
+    on_llm_step: LlmStepSync,
 ) -> None:
     step = pipeline[locate_idx]
     cfg = step.get("config") if isinstance(step.get("config"), dict) else {}
@@ -431,7 +441,7 @@ def _run_locate_step(
             sub,
             pctx,
             hit,
-            on_translate_llm=on_translate_llm,
+            on_llm_step=on_llm_step,
         )
         _apply_hit_result(ctx, buf, hit, inner)
         if ctx.dropped or ctx.halt or ctx.split_parts is not None:
@@ -446,7 +456,7 @@ async def _run_locate_step_async(
     locate_idx: int,
     end: int,
     *,
-    on_translate_llm: TranslateLlmAsync,
+    on_llm_step: LlmStepAsync,
 ) -> None:
     step = pipeline[locate_idx]
     cfg = step.get("config") if isinstance(step.get("config"), dict) else {}
@@ -481,7 +491,7 @@ async def _run_locate_step_async(
             sub,
             pctx,
             hit,
-            on_translate_llm=on_translate_llm,
+            on_llm_step=on_llm_step,
         )
         _apply_hit_result(ctx, buf, hit, inner)
         if ctx.dropped or ctx.halt or ctx.split_parts is not None:
@@ -496,7 +506,7 @@ def _run_whole_message_segment(
     start: int,
     end: int,
     *,
-    on_translate_llm: TranslateLlmSync,
+    on_llm_step: LlmStepSync,
 ) -> None:
     """无 locate 时：将连续变换步骤作为一段在整段消息上执行（支持 goto / split）。"""
     sub = [s for s in pipeline[start:end] if isinstance(s, dict)]
@@ -512,7 +522,7 @@ def _run_whole_message_segment(
         sub,
         pctx,
         None,
-        on_translate_llm=on_translate_llm,
+        on_llm_step=on_llm_step,
     )
     _apply_full_message_result(ctx, result)
 
@@ -523,7 +533,7 @@ async def _run_whole_message_segment_async(
     start: int,
     end: int,
     *,
-    on_translate_llm: TranslateLlmAsync,
+    on_llm_step: LlmStepAsync,
 ) -> None:
     sub = [s for s in pipeline[start:end] if isinstance(s, dict)]
     if not sub:
@@ -538,7 +548,7 @@ async def _run_whole_message_segment_async(
         sub,
         pctx,
         None,
-        on_translate_llm=on_translate_llm,
+        on_llm_step=on_llm_step,
     )
     _apply_full_message_result(ctx, result)
 
@@ -582,7 +592,7 @@ def run_rule_pipeline(ctx: RuleExecContext, pipeline: list[dict[str, Any]]) -> N
                 pipeline,
                 i,
                 n,
-                on_translate_llm=lambda t, sc, pc, h: translate_llm_fallback(t, sc),
+                on_llm_step=lambda mid, t, sc, pc, h: _llm_step_fallback(mid, t, sc),
             )
             if ctx.dropped or ctx.halt or ctx.split_parts is not None:
                 break
@@ -596,7 +606,7 @@ def run_rule_pipeline(ctx: RuleExecContext, pipeline: list[dict[str, Any]]) -> N
             pipeline,
             i,
             sub_end,
-            on_translate_llm=lambda t, sc, pc, h: translate_llm_fallback(t, sc),
+            on_llm_step=lambda mid, t, sc, pc, h: _llm_step_fallback(mid, t, sc),
         )
         if ctx.dropped or ctx.halt or ctx.split_parts is not None:
             break
@@ -608,11 +618,11 @@ async def run_rule_pipeline_async(ctx: RuleExecContext, pipeline: list[dict[str,
     i = 0
     n = len(pipeline)
 
-    async def _on_tl(t: str, sc: dict[str, Any], pc: ProcessingContext, h: MatchHit | None) -> str:
-        fn = ctx.meta.get("translate_llm")
+    async def _on_llm(mid: str, t: str, sc: dict[str, Any], pc: ProcessingContext, h: MatchHit | None) -> str:
+        fn = ctx.meta.get(mid)
         if callable(fn):
             return await fn(t, sc, pc, h)
-        return translate_llm_fallback(t, sc)
+        return _llm_step_fallback(mid, t, sc)
 
     while i < n:
         if ctx.halt or ctx.dropped:
@@ -642,7 +652,7 @@ async def run_rule_pipeline_async(ctx: RuleExecContext, pipeline: list[dict[str,
                 skip_until_locate = True
                 i += 1
                 continue
-            await _run_locate_step_async(ctx, pipeline, i, n, on_translate_llm=_on_tl)
+            await _run_locate_step_async(ctx, pipeline, i, n, on_llm_step=_on_llm)
             if ctx.dropped or ctx.halt or ctx.split_parts is not None:
                 break
             sub_end = _next_locate_index(pipeline, i + 1, n)
@@ -650,7 +660,7 @@ async def run_rule_pipeline_async(ctx: RuleExecContext, pipeline: list[dict[str,
             continue
 
         sub_end = _next_locate_index(pipeline, i, n)
-        await _run_whole_message_segment_async(ctx, pipeline, i, sub_end, on_translate_llm=_on_tl)
+        await _run_whole_message_segment_async(ctx, pipeline, i, sub_end, on_llm_step=_on_llm)
         if ctx.dropped or ctx.halt or ctx.split_parts is not None:
             break
         i = sub_end

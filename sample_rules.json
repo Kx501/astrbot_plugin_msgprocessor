@@ -203,6 +203,38 @@
       ]
     },
     {
+      "id": "review_chat_blanklines",
+      "enabled": false,
+      "priority": 1,
+      "pipeline": [
+        {
+          "id": "guard",
+          "config": {
+            "op": "regex_search",
+            "pattern": "\\n\\s*\\n",
+            "when_true": "goto",
+            "when_true_goto": "fix",
+            "when_false": "pass"
+          }
+        },
+        {
+          "id": "review_llm",
+          "label": "fix",
+          "config": {
+            "prompt": "以下是即将发到聊天平台的回复。若含连续空行：\n- 若是文章/长文排版，保持原样\n- 若是日常闲聊且应分多条发送，用单独一行的 --- 分隔各段，去掉多余空行\n只输出修正后正文。\n\n{{text}}"
+          }
+        },
+        {
+          "id": "marker",
+          "config": {
+            "literal": "---",
+            "action": "split",
+            "delete_literal": true
+          }
+        }
+      ]
+    },
+    {
       "id": "strip_marker_in_brackets",
       "enabled": false,
       "priority": 7,

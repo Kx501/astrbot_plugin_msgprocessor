@@ -17,6 +17,13 @@ def defaults() -> dict[str, Any]:
         "process_messages": True,
         "translate_llm": "default",
         "llm_translate_prompt": "请将以下文本翻译，只输出译文，不要解释。",
+        "review_llm": "default",
+        "llm_review_prompt": (
+            "以下是即将发到聊天平台的回复。若含连续空行：\n"
+            "- 若是文章/长文排版，保持原样\n"
+            "- 若是日常闲聊且应分多条发送，用单独一行的 --- 分隔各段，去掉多余空行\n"
+            "只输出修正后正文。\n\n{{text}}"
+        ),
         "batch_send_mode": "fixed",
         "batch_send_delay": 0.0,
         "batch_send_per_char": 0.05,
@@ -65,6 +72,10 @@ def load_config(data_dir: Path, *, on_error: Any = None) -> dict[str, Any]:
         base["translate_llm"] = raw["translate_llm"].strip()
     if isinstance(raw.get("llm_translate_prompt"), str):
         base["llm_translate_prompt"] = raw["llm_translate_prompt"]
+    if isinstance(raw.get("review_llm"), str):
+        base["review_llm"] = raw["review_llm"].strip()
+    if isinstance(raw.get("llm_review_prompt"), str):
+        base["llm_review_prompt"] = raw["llm_review_prompt"]
     if isinstance(raw.get("batch_send_mode"), str) and raw["batch_send_mode"].strip():
         base["batch_send_mode"] = raw["batch_send_mode"].strip().lower()
     for key in (

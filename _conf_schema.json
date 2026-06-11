@@ -23,10 +23,23 @@
     "hint": "翻译使用的模型"
   },
   "llm_translate_prompt": {
-    "description": "翻译提示词",
+    "description": "翻译提示词（全局默认）",
     "type": "text",
     "default": "请将以下文本翻译成中文，只输出译文，不要解释",
-    "hint": "传入模型的提示词；待译正文由程序自动追加至末尾。"
+    "hint": "规则步骤未配置 prompt 时使用；正文可用 {{text}} 占位，否则自动追加至末尾。"
+  },
+  "review_llm": {
+    "description": "二审模型",
+    "_special": "select_provider",
+    "type": "string",
+    "default": "default",
+    "hint": "AI 二审使用的模型；规则内 review_llm 步骤触发时调用。"
+  },
+  "llm_review_prompt": {
+    "description": "二审提示词（全局默认）",
+    "type": "text",
+    "default": "以下是即将发到聊天平台的回复。若含连续空行：\n- 若是文章/长文排版，保持原样\n- 若是日常闲聊且应分多条发送，用单独一行的 --- 分隔各段，去掉多余空行\n只输出修正后正文。\n\n{{text}}",
+    "hint": "规则步骤未配置 prompt 时使用；可用 {{text}} 占位。"
   },
   "batch_send_mode": {
     "description": "批量连发间隔方式",

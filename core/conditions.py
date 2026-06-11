@@ -25,6 +25,8 @@ _DATE_OPS = frozenset(
 
 _NUMBER_SCAN = re.compile(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?")
 
+_REGEX_OPS = frozenset({"regex_search", "regex_match"})
+
 _COMPARATORS: dict[str, Callable[[float, float], bool]] = {
     "gt": lambda a, b: a > b,
     "gte": lambda a, b: a >= b,
@@ -158,6 +160,31 @@ def _eval_date_op(op: str, parsed: datetime, cfg: dict[str, Any]) -> bool:
     return False
 
 
+def _regex_pattern(cfg: dict[str, Any]) -> str | None:
+    raw = cfg.get("pattern") or cfg.get("regex")
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    return text or None
+
+
+def _eval_regex_op(op: str, text: str, cfg: dict[str, Any]) -> bool:
+    pattern = _regex_pattern(cfg)
+    if pattern is None:
+        return False
+    flags = _parse_regex_flags(cfg.get("regex_flags"))
+    try:
+        if op == "regex_match":
+            matched = re.fullmatch(pattern, text, flags=flags) is not None
+        else:
+            matched = re.search(pattern, text, flags=flags) is not None
+    except re.error:
+        return False
+    if not matched:
+        return _flag_true(cfg.get("if_no_match"))
+    return True
+
+
 def _compare_op_parts(op: str) -> tuple[str, str] | None:
     if not op.startswith("number_"):
         return None
@@ -180,6 +207,9 @@ def eval_condition(text: str, cfg: dict[str, Any]) -> bool:
         if parsed is None:
             return _flag_true(cfg.get("if_no_date"))
         return _eval_date_op(op, parsed, cfg)
+
+    if op in _REGEX_OPS:
+        return _eval_regex_op(op, source, cfg)
 
     parts = _compare_op_parts(op)
     if parts is not None:

@@ -79,6 +79,7 @@ export const UI = {
   moduleReplace: "替换",
   moduleDelete: "删除",
   moduleTranslateLlm: "AI翻译",
+  moduleReviewLlm: "AI审查",
   modulePrepend: "前方拼接",
   moduleAppend: "后方拼接",
   moduleGuard: "条件守卫",
@@ -106,6 +107,11 @@ export const UI = {
   guardCondCmp: "比较方式",
   guardCondKindDate: "日期",
   guardCondKindNumber: "数值",
+  guardCondKindRegex: "正则",
+  guardCondCmpRegexSearch: "任意匹配",
+  guardCondCmpRegexMatch: "全文匹配",
+  guardCondRegexPattern: "正则模式",
+  guardCondIfNoMatch: "未匹配时视为成立",
   guardCondCmpDateBeforeAt: "早于指定时间",
   guardCondCmpDateAfterAt: "晚于指定时间",
   guardCondCmpDateWithinDays: "时间范围内",
@@ -142,7 +148,11 @@ export const UI = {
   cfgLiteralEscapeHint: "支持转义：\\n 换行、\\t 制表符、\\\\ 反斜杠",
   cfgTranslateFallbackPrefix: "模型不可用或失败时的回退标记",
   cfgTranslateLlmHint:
-    "译向与提示词在插件配置中设置；测试时仅展示回退标记。",
+    "模块 prompt 优先于插件全局 llm_translate_prompt；测试台不调用模型，仅回退标记。",
+  cfgPrompt: "提示词（可选）",
+  cfgPromptHint: "支持 {{text}} 原文占位；留空则使用插件全局默认提示词。",
+  cfgReviewLlmHint:
+    "模块 prompt 优先于插件全局 llm_review_prompt；失败时保持原文。",
   cfgMarkerLiteral: "字面量标记",
   cfgMarkerLiteralHint: "固定字符串，如 ---、【待填】。支持转义 \\n、\\t、\\\\。",
   cfgMarkerDeleteLiteral: "拆分时删除标记",
@@ -175,6 +185,12 @@ export const UI = {
 export const GUARD_KIND_OPTIONS: { value: string; label: string }[] = [
   { value: "date", label: UI.guardCondKindDate },
   { value: "number", label: UI.guardCondKindNumber },
+  { value: "regex", label: UI.guardCondKindRegex },
+];
+
+export const GUARD_REGEX_OP_OPTIONS: { value: string; label: string }[] = [
+  { value: "regex_search", label: UI.guardCondCmpRegexSearch },
+  { value: "regex_match", label: UI.guardCondCmpRegexMatch },
 ];
 
 const GUARD_CMP_COMMON: { value: string; label: string }[] = [
@@ -212,6 +228,7 @@ export const MODULE_OPTIONS: ModuleOption[] = [
   { value: "replace", label: UI.moduleReplace, group: "general" },
   { value: "delete", label: UI.moduleDelete, group: "general" },
   { value: "translate_llm", label: UI.moduleTranslateLlm, group: "general" },
+  { value: "review_llm", label: UI.moduleReviewLlm, group: "general" },
   { value: "prepend", label: UI.modulePrepend, group: "general" },
   { value: "append", label: UI.moduleAppend, group: "general" },
   { value: "guard", label: UI.moduleGuard, group: "general" },

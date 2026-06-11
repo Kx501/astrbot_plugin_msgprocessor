@@ -20,6 +20,7 @@ import {
   GUARD_CMP_BY_KIND,
   GUARD_DATE_OP_OPTIONS,
   GUARD_KIND_OPTIONS,
+  GUARD_REGEX_OP_OPTIONS,
   MARKER_ACTION_OPTIONS,
   MODULE_GROUPS,
   MODULE_OPTIONS,
@@ -77,28 +78,49 @@ function pipelineGotoLabels(pipeline: PipelineStepUI[], excludeKey: string): str
   return out;
 }
 
-type GuardKind = "date" | "number";
+type GuardKind = "date" | "number" | "regex";
 type GuardNumberCmp = "gt" | "gte" | "lt" | "lte" | "eq" | "ne";
 type GuardDateOp = "date_before_at" | "date_after_at" | "date_within_days" | "date_outside_days";
+type GuardRegexOp = "regex_search" | "regex_match";
 
 const GUARD_DATE_OPS = new Set<string>(GUARD_DATE_OP_OPTIONS.map((o) => o.value));
+const GUARD_REGEX_OPS = new Set<string>(GUARD_REGEX_OP_OPTIONS.map((o) => o.value));
 
 function isGuardDateOp(op: string): op is GuardDateOp {
   return GUARD_DATE_OPS.has(op);
 }
 
-function parseGuardOp(op: string): { kind: GuardKind; numberCmp: GuardNumberCmp; dateOp: GuardDateOp } {
+function isGuardRegexOp(op: string): op is GuardRegexOp {
+  return GUARD_REGEX_OPS.has(op);
+}
+
+function parseGuardOp(op: string): {
+  kind: GuardKind;
+  numberCmp: GuardNumberCmp;
+  dateOp: GuardDateOp;
+  regexOp: GuardRegexOp;
+} {
   if (op.startsWith("number_")) {
     return {
       kind: "number",
       numberCmp: op.slice("number_".length) as GuardNumberCmp,
       dateOp: "date_outside_days",
+      regexOp: "regex_search",
+    };
+  }
+  if (isGuardRegexOp(op)) {
+    return {
+      kind: "regex",
+      numberCmp: "gt",
+      dateOp: "date_outside_days",
+      regexOp: op,
     };
   }
   return {
     kind: "date",
     numberCmp: "gt",
     dateOp: isGuardDateOp(op) ? op : "date_outside_days",
+    regexOp: "regex_search",
   };
 }
 
@@ -117,6 +139,9 @@ function guardDefaults(op: string): Record<string, unknown> {
   if (op.startsWith("number_")) {
     return { ...base, value: 0, regex: "", if_missing: "false" };
   }
+  if (op === "regex_search" || op === "regex_match") {
+    return { ...base, op, pattern: "", regex_flags: "", if_no_match: "false" };
+  }
   return base;
 }
 
@@ -125,7 +150,9 @@ export function defaultConfig(mid: string): Record<string, unknown> {
     case "replace":
       return { from: "", to: "", regex: false, regex_flags: "" };
     case "translate_llm":
-      return { prefix: "[译]" };
+      return { prefix: "[译]", prompt: "" };
+    case "review_llm":
+      return { prompt: "" };
     case "append":
       return { text: "" };
     case "prepend":
@@ -610,6 +637,15 @@ function ModuleConfigFields({
       return (
         <div className="field-stack field-stack--block">
           <label className="field-stack field-stack--block">
+            <span className="label-text">{UI.cfgPrompt}</span>
+            <textarea
+              rows={4}
+              value={String(c.prompt ?? "")}
+              placeholder="{{text}}"
+              onChange={(e) => set({ prompt: e.target.value })}
+            />
+          </label>
+          <label className="field-stack field-stack--block">
             <span className="label-text">{UI.cfgTranslateFallbackPrefix}</span>
             <input
               value={String(c.prefix ?? "")}
@@ -617,6 +653,23 @@ function ModuleConfigFields({
             />
           </label>
           <p className="muted pipeline-config-hint">{UI.cfgTranslateLlmHint}</p>
+          <p className="muted pipeline-config-hint">{UI.cfgPromptHint}</p>
+        </div>
+      );
+    case "review_llm":
+      return (
+        <div className="field-stack field-stack--block">
+          <label className="field-stack field-stack--block">
+            <span className="label-text">{UI.cfgPrompt}</span>
+            <textarea
+              rows={6}
+              value={String(c.prompt ?? "")}
+              placeholder="{{text}}"
+              onChange={(e) => set({ prompt: e.target.value })}
+            />
+          </label>
+          <p className="muted pipeline-config-hint">{UI.cfgReviewLlmHint}</p>
+          <p className="muted pipeline-config-hint">{UI.cfgPromptHint}</p>
         </div>
       );
     case "append":
@@ -731,9 +784,10 @@ function GuardConfigFields({
   stepKey: string;
 }) {
   const op = String(c.op ?? "date_outside_days");
-  const { kind, numberCmp, dateOp } = parseGuardOp(op);
+  const { kind, numberCmp, dateOp, regexOp } = parseGuardOp(op);
   const isDate = kind === "date";
   const isNumber = kind === "number";
+  const isRegex = kind === "regex";
   const isDaysDate = isDate && (dateOp === "date_within_days" || dateOp === "date_outside_days");
   const isAnchorDate = isDate && (dateOp === "date_before_at" || dateOp === "date_after_at");
 
@@ -748,7 +802,12 @@ function GuardConfigFields({
             value={kind}
             onChange={(e) => {
               const nextKind = e.target.value as GuardKind;
-              const nextOp = nextKind === "date" ? "date_outside_days" : "number_gt";
+              const nextOp =
+                nextKind === "date"
+                  ? "date_outside_days"
+                  : nextKind === "regex"
+                    ? "regex_search"
+                    : "number_gt";
               set({
                 ...guardDefaults(nextOp),
                 when_true: c.when_true ?? "pass",
@@ -778,6 +837,24 @@ function GuardConfigFields({
               }}
             >
               {GUARD_DATE_OP_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          ) : isRegex ? (
+            <select
+              value={regexOp}
+              onChange={(e) => {
+                const nextOp = e.target.value as GuardRegexOp;
+                set({
+                  ...guardDefaults(nextOp),
+                  when_true: c.when_true ?? "pass",
+                  when_false: c.when_false ?? "pass",
+                });
+              }}
+            >
+              {GUARD_REGEX_OP_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
@@ -843,6 +920,34 @@ function GuardConfigFields({
               onChange={(e) => set({ if_no_date: e.target.checked ? "true" : "false" })}
             />
             <span>{UI.guardCondIfNoDate}</span>
+          </label>
+        </>
+      )}
+      {isRegex && (
+        <>
+          <label className="field-stack">
+            <span className="label-text">{UI.guardCondRegexPattern}</span>
+            <input
+              placeholder="例如：\\n\\s*\\n"
+              value={String(c.pattern ?? "")}
+              onChange={(e) => set({ pattern: e.target.value })}
+            />
+          </label>
+          <label className="field-stack">
+            <span className="label-text">{UI.cfgRegexFlags}</span>
+            <input
+              placeholder="例如：MULTILINE, DOTALL"
+              value={String(c.regex_flags ?? "")}
+              onChange={(e) => set({ regex_flags: e.target.value })}
+            />
+          </label>
+          <label className="field-inline-check">
+            <input
+              type="checkbox"
+              checked={String(c.if_no_match ?? "false") === "true"}
+              onChange={(e) => set({ if_no_match: e.target.checked ? "true" : "false" })}
+            />
+            <span>{UI.guardCondIfNoMatch}</span>
           </label>
         </>
       )}
