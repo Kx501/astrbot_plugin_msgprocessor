@@ -10,6 +10,7 @@ from .matchers import find_hits
 from .models import MatchHit, ModuleResult, ProcessingContext
 from .pipeline_ids import is_locate_step
 from .modules import get_module, review_llm_fallback, translate_llm_fallback
+from .http_render import render_image_http
 
 _LLM_STEP_IDS = frozenset({"translate_llm", "review_llm"})
 
@@ -93,6 +94,9 @@ def _apply_one_module_step(
     scfg = st.get("config") if isinstance(st.get("config"), dict) else {}
     if mid in _LLM_STEP_IDS:
         return ModuleResult(on_llm_step(mid, text, scfg, pctx, hit))
+    if mid == "render_image":
+        # Web 测试台 / 同步处理不执行网络请求
+        return ModuleResult(text)
     if mid == "translate_stub":
         return ModuleResult(translate_llm_fallback(text, scfg))
     fn = get_module(mid)
@@ -115,6 +119,11 @@ async def _apply_one_module_step_async(
     scfg = st.get("config") if isinstance(st.get("config"), dict) else {}
     if mid in _LLM_STEP_IDS:
         return ModuleResult(await on_llm_step(mid, text, scfg, pctx, hit))
+    if mid == "render_image":
+        out = await render_image_http(text, scfg)
+        if out:
+            return ModuleResult(out, halt=True)
+        return ModuleResult(text)
     if mid == "translate_stub":
         return ModuleResult(translate_llm_fallback(text, scfg))
     fn = get_module(mid)

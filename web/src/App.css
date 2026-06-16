@@ -1199,11 +1199,17 @@ textarea {
   gap: 0.5rem 1.25rem;
 }
 
-.scroll-to-top {
+.scroll-nav {
   position: fixed;
   right: 1.15rem;
   bottom: 1.15rem;
   z-index: 120;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.scroll-nav-btn {
   width: 2.5rem;
   height: 2.5rem;
   display: flex;
@@ -1227,18 +1233,18 @@ textarea {
     border-color 0.15s ease;
 }
 
-.scroll-to-top--visible {
+.scroll-nav-btn--visible {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
 }
 
-.scroll-to-top:hover {
+.scroll-nav-btn:hover {
   background: var(--subtle-hover);
   border-color: var(--accent);
 }
 
-.scroll-to-top:focus-visible {
+.scroll-nav-btn:focus-visible {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--focus-ring);

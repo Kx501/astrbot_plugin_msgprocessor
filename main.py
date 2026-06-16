@@ -13,7 +13,7 @@ from typing import Any
 import uvicorn
 from astrbot.api import logger as ab_logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
-from astrbot.api.message_components import Plain
+from astrbot.api.message_components import Image, Plain
 from astrbot.api.star import Context, Star, StarTools
 
 from .core.config import build_config, parse_delay_policy
@@ -71,6 +71,13 @@ def _plain(comp: Any, text: str) -> Any:
         return type(comp)(text)
     except Exception:
         return Plain(text)
+
+
+def _image_from_base64(b64: str) -> Any:
+    try:
+        return Image.fromBase64(b64)
+    except Exception:
+        return Plain("[image]")
 
 
 def _preview(s: Any, max_len: int = 120) -> str:
@@ -230,17 +237,25 @@ class MsgProcessorStar(Star):
             if result.dropped or not result.segments:
                 continue
 
-            texts = [s.text for s in result.segments]
-            if len(texts) > 1:
-                for idx, part in enumerate(texts):
-                    new_comp = _plain(comp, part)
+            segs = result.segments
+            if len(segs) > 1:
+                for idx, seg in enumerate(segs):
+                    if seg.type == "image_base64":
+                        new_comp = _image_from_base64(seg.text)
+                    else:
+                        new_comp = _plain(comp, seg.text)
                     if idx == 0:
                         batches[-1].append(new_comp)
                     else:
                         batches.append([new_comp])
                 continue
 
-            out = texts[0]
+            seg = segs[0]
+            if seg.type == "image_base64":
+                batches[-1].append(_image_from_base64(seg.text))
+                continue
+
+            out = seg.text
             if out != text:
                 try:
                     setattr(comp, "text", out)

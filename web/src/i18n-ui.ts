@@ -80,6 +80,7 @@ export const UI = {
   moduleDelete: "删除",
   moduleTranslateLlm: "AI翻译",
   moduleReviewLlm: "AI审查",
+  moduleRenderImage: "渲染图片",
   modulePrepend: "前方拼接",
   moduleAppend: "后方拼接",
   moduleGuard: "条件守卫",
@@ -158,6 +159,12 @@ export const UI = {
   cfgPromptHint: "支持 {{text}} 原文占位；留空则使用插件全局默认提示词。",
   cfgReviewLlmHint:
     "模块 prompt 优先于插件全局 llm_review_prompt；失败时保持原文。",
+  cfgRenderImageHint:
+    "承接上一步 guard 等判断：需渲染时 goto 到本步骤，将当前工作区文本作为 {{text}} 请求渲染接口并发送图片。",
+  cfgRenderMethod: "请求方式",
+  cfgRenderUrl: "链接",
+  cfgRenderBodyJson: "Body JSON（POST）",
+  cfgRenderBodyJsonHint: "POST 时发送 JSON；支持 {{text}} 占位。留空则默认 {\"text\":\"...\"}。",
   cfgMarkerLiteral: "字面量标记",
   cfgMarkerLiteralHint: "固定字符串，如 ---、【待填】。支持转义 \\n、\\t、\\\\。",
   cfgMarkerDeleteLiteral: "拆分时删除标记",
@@ -185,6 +192,7 @@ export const UI = {
   themeDark: "深色",
   themeCycleAria: "切换界面主题",
   scrollToTop: "回到顶部",
+  scrollToBottom: "跳转底部",
 } as const;
 
 export const GUARD_LENGTH_COUNT_OPTIONS: { value: string; label: string }[] = [
@@ -241,6 +249,7 @@ export const MODULE_OPTIONS: ModuleOption[] = [
   { value: "delete", label: UI.moduleDelete, group: "general" },
   { value: "translate_llm", label: UI.moduleTranslateLlm, group: "general" },
   { value: "review_llm", label: UI.moduleReviewLlm, group: "general" },
+  { value: "render_image", label: UI.moduleRenderImage, group: "general" },
   { value: "prepend", label: UI.modulePrepend, group: "general" },
   { value: "append", label: UI.moduleAppend, group: "general" },
   { value: "guard", label: UI.moduleGuard, group: "general" },

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .models import ProcessResult, ProcessSegment
+from .segment_markers import parse_segment_marker
 from .steps import RuleExecContext, normalize_rule_pipeline, run_rule_pipeline, run_rule_pipeline_async
 
 ProcessOutput = str | list[str] | None
@@ -99,7 +100,15 @@ def _build_process_result(message: str, pending: list[str]) -> ProcessResult:
 def _segments_from_pending(pending: list[str]) -> list[ProcessSegment]:
     if not pending:
         return []
-    return [ProcessSegment(text=text) for text in pending]
+    out: list[ProcessSegment] = []
+    for text in pending:
+        marker = parse_segment_marker(text)
+        if marker is None:
+            out.append(ProcessSegment(text=text, type="plain"))
+            continue
+        seg_type, payload = marker
+        out.append(ProcessSegment(text=payload, type=seg_type))
+    return out
 
 
 def process_message(

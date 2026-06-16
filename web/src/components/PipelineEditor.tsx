@@ -170,6 +170,8 @@ export function defaultConfig(mid: string): Record<string, unknown> {
       return { prefix: "[译]", prompt: "" };
     case "review_llm":
       return { prompt: "" };
+    case "render_image":
+      return { method: "POST", url: "", body_json: '{"text":"{{text}}"}', timeout_s: 15 };
     case "append":
       return { text: "" };
     case "prepend":
@@ -687,6 +689,42 @@ function ModuleConfigFields({
           </label>
           <p className="muted pipeline-config-hint">{UI.cfgReviewLlmHint}</p>
           <p className="muted pipeline-config-hint">{UI.cfgPromptHint}</p>
+        </div>
+      );
+    case "render_image":
+      return (
+        <div className="field-stack field-stack--block">
+          <div className="pipeline-config-grid">
+            <label className="field-stack">
+              <span className="label-text">{UI.cfgRenderMethod}</span>
+              <select
+                value={String(c.method ?? "GET")}
+                onChange={(e) => set({ method: e.target.value })}
+              >
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+              </select>
+            </label>
+            <label className="field-stack">
+              <span className="label-text">{UI.cfgRenderUrl}</span>
+              <input
+                value={String(c.url ?? "")}
+                placeholder="https://example.com/render"
+                onChange={(e) => set({ url: e.target.value })}
+              />
+            </label>
+          </div>
+          <label className="field-stack field-stack--block">
+            <span className="label-text">{UI.cfgRenderBodyJson}</span>
+            <textarea
+              rows={6}
+              value={String(c.body_json ?? "")}
+              placeholder='{"text":"{{text}}"}'
+              onChange={(e) => set({ body_json: e.target.value })}
+            />
+          </label>
+          <p className="muted pipeline-config-hint">{UI.cfgRenderBodyJsonHint}</p>
+          <p className="muted pipeline-config-hint">{UI.cfgRenderImageHint}</p>
         </div>
       );
     case "append":

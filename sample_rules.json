@@ -235,6 +235,41 @@
       ]
     },
     {
+      "id": "render_image_example",
+      "enabled": false,
+      "priority": 1,
+      "pipeline": [
+        {
+          "id": "guard",
+          "config": {
+            "op": "regex_search",
+            "pattern": "^/render\\s",
+            "when_true": "goto",
+            "when_true_goto": "render",
+            "when_false": "pass"
+          }
+        },
+        {
+          "id": "replace",
+          "config": {
+            "from": "^/render\\s*",
+            "to": "",
+            "regex": true
+          }
+        },
+        {
+          "id": "render_image",
+          "label": "render",
+          "config": {
+            "method": "POST",
+            "url": "https://example.com/render",
+            "body_json": "{\"text\":\"{{text}}\"}",
+            "timeout_s": 15
+          }
+        }
+      ]
+    },
+    {
       "id": "strip_marker_in_brackets",
       "enabled": false,
       "priority": 7,
