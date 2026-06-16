@@ -994,6 +994,23 @@ textarea {
   gap: var(--match-section-gap) 1.25rem;
 }
 
+.guard-outcome-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.guard-outcome-action {
+  flex: 1 1 5.5rem;
+  min-width: 5.5rem;
+}
+
+.guard-outcome-goto {
+  flex: 2 1 7rem;
+  min-width: 7rem;
+}
+
 .span-cols-2 {
   grid-column: 1 / -1;
 }

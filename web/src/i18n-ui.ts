@@ -94,12 +94,12 @@ export const UI = {
   markerActionDelete: "含标记时删除整段",
   markerActionReplace: "含标记时替换整段",
 
-  guardWhenTrue: "条件成立时",
-  guardWhenFalse: "条件不成立时",
-  guardOutcomePass: "不做处理（继续后续步骤）",
-  guardOutcomeBlock: "拦截发送",
-  guardOutcomeHalt: "终止本条规则后续步骤",
-  guardOutcomeGoto: "跳转到指定步骤",
+  guardWhenTrue: "成立",
+  guardWhenFalse: "不成立",
+  guardOutcomePass: "继续",
+  guardOutcomeBlock: "拦截",
+  guardOutcomeHalt: "终止",
+  guardOutcomeGoto: "跳转",
   guardGotoTarget: "跳转目标",
   guardGotoUnset: "请选择步骤标识",
   guardGotoHint:

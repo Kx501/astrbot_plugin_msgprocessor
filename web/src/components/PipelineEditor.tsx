@@ -791,39 +791,43 @@ function GuardOutcomeField({
 }) {
   const outcome = String(c[outcomeKey] ?? "pass");
   return (
-    <div className="field-stack">
+    <label className="field-stack guard-outcome-field">
       <span className="label-text">{label}</span>
-      <select
-        value={outcome}
-        onChange={(e) => {
-          const next = e.target.value;
-          const patch: Record<string, unknown> = { [outcomeKey]: next };
-          if (next !== "goto") {
-            patch[gotoKey] = "";
-          }
-          set(patch);
-        }}
-      >
-        {GUARD_OUTCOMES.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      {outcome === "goto" && (
+      <div className="guard-outcome-controls">
         <select
-          value={String(c[gotoKey] ?? "")}
-          onChange={(e) => set({ [gotoKey]: e.target.value })}
+          className="guard-outcome-action"
+          value={outcome}
+          onChange={(e) => {
+            const next = e.target.value;
+            const patch: Record<string, unknown> = { [outcomeKey]: next };
+            if (next !== "goto") {
+              patch[gotoKey] = "";
+            }
+            set(patch);
+          }}
         >
-          <option value="">{UI.guardGotoUnset}</option>
-          {gotoLabels.map((lab) => (
-            <option key={lab} value={lab}>
-              {lab}
+          {GUARD_OUTCOMES.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
             </option>
           ))}
         </select>
-      )}
-    </div>
+        {outcome === "goto" && (
+          <select
+            className="guard-outcome-goto"
+            value={String(c[gotoKey] ?? "")}
+            onChange={(e) => set({ [gotoKey]: e.target.value })}
+          >
+            <option value="">{UI.guardGotoUnset}</option>
+            {gotoLabels.map((lab) => (
+              <option key={lab} value={lab}>
+                {lab}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+    </label>
   );
 }
 
