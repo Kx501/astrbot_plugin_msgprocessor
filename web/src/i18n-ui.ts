@@ -164,7 +164,7 @@ export const UI = {
   cfgRenderMethod: "请求方式",
   cfgRenderUrl: "链接",
   cfgRenderBodyJson: "Body JSON（POST）",
-  cfgRenderBodyJsonHint: "POST 时发送 JSON；支持 {{text}} 占位。留空则默认 {\"text\":\"...\"}。",
+  cfgRenderBodyJsonHint: "POST 时发送 JSON；字段值内可用 {{text}} 占位（支持多行）。留空则默认 {\"text\":\"...\"}。",
   cfgMarkerLiteral: "字面量标记",
   cfgMarkerLiteralHint: "固定字符串，如 ---、【待填】。支持转义 \\n、\\t、\\\\。",
   cfgMarkerDeleteLiteral: "拆分时删除标记",
