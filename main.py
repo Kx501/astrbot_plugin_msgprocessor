@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """AstrBot 入口：插件类须位于 main.py。仅处理待发消息纯文本。"""
 
 from __future__ import annotations
@@ -14,14 +13,17 @@ import uvicorn
 from astrbot.api import logger as ab_logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.message_components import Image, Plain
+from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, StarTools
+from astrbot.core.agent.message import TextPart
 
 from .core.config import build_config, parse_delay_policy
 from .core.engine import process_message_async
+from .core.injection import InjectionContext, process_request
 from .core.loader import load_rules_from_path
 from .core.modules import review_llm_fallback, translate_llm_fallback
-from .core.prompts import render_llm_prompt, resolve_step_prompt
 from .core.outbound import plain_char_count, send_follow_ups
+from .core.prompts import render_llm_prompt, resolve_step_prompt
 from .core.server import create_app
 
 _ROOT = Path(__file__).resolve().parent
@@ -151,6 +153,7 @@ class MsgProcessorStar(Star):
         self._data_dir = Path(StarTools.get_data_dir(None))
         self._data_dir.mkdir(parents=True, exist_ok=True)
         self._rules_path = self._data_dir / "rules.json"
+        self._injection_lock = asyncio.Lock()
         self._init_rules()
         self._cfg = build_config(
             self._data_dir,
@@ -344,6 +347,65 @@ class MsgProcessorStar(Star):
             return out if out else review_llm_fallback(text, scfg)
 
         return {"translate_llm": translate, "review_llm": review}
+
+    @filter.on_llm_request()
+    async def on_llm_request(self, event: AstrMessageEvent, req: ProviderRequest) -> None:
+        """Apply LLM request rules and persist successful daily injections.
+
+        Args:
+            event: Incoming chat event supplying sender metadata.
+            req: Mutable request about to be sent to the provider.
+        """
+        try:
+            doc = self._rules_doc()
+            if not any(r.get("target") == "llm_request" and r.get("enabled", True) for r in doc.get("rules", []) if isinstance(r, dict)):
+                return
+            sender = event.message_obj.sender
+            session_key = json.dumps([
+                str(event.unified_msg_origin),
+                str(getattr(req.conversation, "cid", "") or req.session_id or ""),
+            ])
+            ctx = InjectionContext(
+                user_id=str(event.get_sender_id()),
+                user_nickname=str(getattr(sender, "nickname", "") or event.get_sender_id()),
+                group_id=str(event.get_group_id() or ""),
+                umo=str(event.unified_msg_origin),
+                session_id=str(req.session_id or event.unified_msg_origin),
+                conversation_id=str(getattr(req.conversation, "cid", "") or ""),
+                self_id=str(event.get_self_id()),
+                timezone=str(self.context.get_config(umo=event.unified_msg_origin).get("timezone") or "Asia/Shanghai"),
+            )
+            async with self._injection_lock:
+                dates = await self.get_kv_data("injection_daily_dates", {})
+                result = process_request(
+                    doc, req.prompt or "", req.system_prompt or "", ctx,
+                    daily_dates=dates if isinstance(dates, dict) else {},
+                )
+                if not result.blocks:
+                    return
+                parts = []
+                for part in result.parts:
+                    content = TextPart(text=part["text"])
+                    if part["ephemeral"]:
+                        content.mark_as_temp()
+                    parts.append(content)
+                req.prompt = result.prompt
+                req.system_prompt = result.system_prompt
+                req.extra_user_content_parts.extend(parts)
+                if result.daily_dates != dates:
+                    await self.put_kv_data("injection_daily_dates", result.daily_dates)
+            previous = event.get_extra("_md_injection")
+            trace = previous if isinstance(previous, dict) else {}
+            event.set_extra("_md_injection", {
+                **trace,
+                "source": "astrbot_plugin_msgprocessor",
+                "date": result.date,
+                "session_key": session_key,
+                "rule_ids": list(trace.get("rule_ids", [])) + [b["rule_id"] for b in result.blocks],
+                "blocks": list(trace.get("blocks", [])) + result.blocks,
+            })
+        except Exception:
+            ab_logger.exception("MsgProcessor: LLM request injection failed")
 
     @filter.on_llm_response()
     async def on_llm_response(self, event: AstrMessageEvent, resp: Any) -> None:

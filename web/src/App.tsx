@@ -4,8 +4,9 @@ import { PipelineEditor, defaultConfig } from "./components/PipelineEditor";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { TestBench } from "./components/TestBench";
 import { ThemeToggle } from "./components/ThemeToggle";
+import { InjectionImport } from "./components/InjectionImport";
 import { UI } from "./i18n-ui";
-import type { RuleUI, RulesDocumentUI } from "./types";
+import type { RuleUI, RulesDocumentUI, RuleTarget } from "./types";
 import { newKey, wireToUI } from "./types";
 
 /** 顶栏副标题：整段一句维护；仅渲染时把「中的 rules.json…」包进 nowrap，避免换行碎裂 */
@@ -25,6 +26,7 @@ function headerSubtitleContent(text: string) {
 
 function emptyRule(): RuleUI {
   return {
+    target: "outbound",
     id: `rule_${Date.now()}`,
     enabled: true,
     priority: 0,
@@ -131,7 +133,7 @@ export default function App() {
         </div>
       </header>
 
-      <TestBench doc={doc} selectedRuleId={rule?.id ?? ""} />
+      <TestBench key={rule?.target ?? "outbound"} doc={doc} selectedRuleId={rule?.id ?? ""} target={rule?.target ?? "outbound"} />
 
       <div className="layout">
         <aside className="sidebar card section-card">
@@ -158,11 +160,23 @@ export default function App() {
                   onClick={() => setSelected(i)}
                 >
                   {r.id?.trim() ? r.id : UI.ruleUntitled(i + 1)}
+                  <small className="rule-category">{r.target === "llm_request" ? "LLM 请求" : "消息发送"}</small>
                 </button>
               </li>
             ))}
           </ul>
           <div className="stack sidebar-actions">
+            <InjectionImport onImport={(rules) => {
+              const ids = new Set(doc.rules.map((r) => r.id));
+              for (const imported of rules) {
+                const base = imported.id;
+                let suffix = 1;
+                while (ids.has(imported.id)) imported.id = `${base}_${suffix++}`;
+                ids.add(imported.id);
+              }
+              setDoc({ ...doc, rules: [...doc.rules, ...rules] });
+              setSelected(doc.rules.length);
+            }} />
             <button type="button" className="btn btn-primary btn-block" onClick={() => void saveEditor()}>
               {UI.saveFile}
             </button>
@@ -209,6 +223,18 @@ export default function App() {
 
               <div className="form-meta">
                 <label className="field-stack">
+                  <span className="label-text">分类</span>
+                  <select value={rule.target} onChange={(e) => {
+                    const target = e.target.value as RuleTarget;
+                    if (rule.pipeline.some((step) => step.id !== "noop") && !confirm("切换分类会清空当前规则的模块配置。是否继续？")) return;
+                    const id = target === "llm_request" ? "inject" : "noop";
+                    updateRule({ target, pipeline: [{ _key: newKey(), id, label: "s1", config: defaultConfig(id) }] });
+                  }}>
+                    <option value="outbound">消息发送</option>
+                    <option value="llm_request">LLM 请求</option>
+                  </select>
+                </label>
+                <label className="field-stack">
                   <span className="label-text">{UI.fieldId}</span>
                   <input value={rule.id} onChange={(e) => updateRule({ id: e.target.value })} />
                 </label>
@@ -220,7 +246,7 @@ export default function App() {
                     onChange={(e) => updateRule({ priority: Number(e.target.value) || 0 })}
                   />
                 </label>
-                <label className="field-stack">
+                {rule.target === "outbound" && <label className="field-stack">
                   <span className="label-text">{UI.fieldMaxMatches}</span>
                   <input
                     type="number"
@@ -236,14 +262,15 @@ export default function App() {
                       })
                     }
                   />
-                </label>
+                </label>}
               </div>
 
               <fieldset className="fieldset">
                 <legend>{UI.sectionPipeline}</legend>
                 <div className="fieldset-body">
-                  <p className="muted section-desc pipeline-intro">{UI.pipelineHint}</p>
+                  <p className="muted section-desc pipeline-intro">{rule.target === "llm_request" ? "发送给 LLM 前执行注入；每次请求规则先执行，每日一次规则随后执行。同频率按优先级执行，规则内按模块顺序执行。" : UI.pipelineHint}</p>
                   <PipelineEditor
+                    target={rule.target}
                     pipeline={rule.pipeline}
                     onChange={(pipeline) => updateRule({ pipeline })}
                   />

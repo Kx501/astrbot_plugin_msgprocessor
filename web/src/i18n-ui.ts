@@ -3,7 +3,7 @@
 export const UI = {
   appTitle: "MsgProcessor",
   appSubtitle:
-    "待发消息文本处理规则 · 与 AstrBot 插件数据目录中的 rules.json 同步",
+    "LLM 请求与消息发送规则 · 与 AstrBot 插件数据目录中的 rules.json 同步",
   footer: "文本规则按优先级依次匹配；修改后请点击保存写入磁盘。",
 
   loading: "正在加载规则…",
@@ -42,7 +42,7 @@ export const UI = {
 
   fieldId: "规则标识",
   fieldEnabled: "启用此规则",
-  fieldPriority: "优先级（数值越小越先执行）",
+  fieldPriority: "优先级（数值越大越先执行）",
   anchorStart: "开始锚点",
   anchorEnd: "结束锚点",
   fieldLiteral: "锚点字符串",
@@ -243,6 +243,7 @@ export const MARKER_ACTION_OPTIONS: { value: string; label: string }[] = [
 export type ModuleOption = { value: string; label: string; group?: string };
 
 export const MODULE_OPTIONS: ModuleOption[] = [
+  { value: "inject", label: "注入", group: "llm_request" },
   { value: "noop", label: UI.moduleNoop, group: "general" },
   { value: "locate", label: UI.moduleLocate, group: "general" },
   { value: "replace", label: UI.moduleReplace, group: "general" },

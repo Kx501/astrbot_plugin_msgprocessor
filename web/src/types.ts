@@ -1,4 +1,5 @@
 export type SimpleOp = "equals" | "contains" | "startswith" | "endswith";
+export type RuleTarget = "outbound" | "llm_request";
 
 export interface WindowAnchor {
   literal: string;
@@ -14,6 +15,7 @@ export interface PipelineStepWire {
 
 /** 磁盘 rules.json（schema_version 5） */
 export interface RuleWire {
+  target?: RuleTarget;
   id: string;
   enabled: boolean;
   priority: number;
@@ -31,6 +33,7 @@ export interface PipelineStepUI extends PipelineStepWire {
 }
 
 export interface RuleUI {
+  target: RuleTarget;
   id: string;
   enabled: boolean;
   priority: number;
@@ -55,6 +58,13 @@ export interface ProcessEffectWire {
 }
 
 export interface ProcessResponseWire {
+  request?: {
+    prompt: string;
+    system_prompt: string;
+    parts: { text: string; ephemeral: boolean }[];
+    blocks: { rule_id: string; step: string; text: string }[];
+    daily_dates: Record<string, string>;
+  };
   schema_version: number;
   input: string;
   segments: ProcessSegmentWire[];
@@ -126,7 +136,9 @@ function pipelineWireToUI(arr: PipelineStepWire[]): PipelineStepUI[] {
       ...p,
       _key: newKey(),
       label: typeof p.label === "string" ? p.label : "",
-      config: p.config && typeof p.config === "object" ? p.config : {},
+      config: p.id === "inject"
+        ? { state_id: newKey(), ...(p.config ?? {}) }
+        : p.config && typeof p.config === "object" ? p.config : {},
     })),
   );
 }
@@ -134,6 +146,7 @@ function pipelineWireToUI(arr: PipelineStepWire[]): PipelineStepUI[] {
 function ruleWireToUI(r: RuleWire): RuleUI {
   const pipeline = Array.isArray(r.pipeline) ? r.pipeline : [];
   return {
+    target: r.target ?? "outbound",
     id: r.id,
     enabled: r.enabled ?? true,
     priority: Number(r.priority) || 0,
@@ -144,7 +157,7 @@ function ruleWireToUI(r: RuleWire): RuleUI {
 
 export function wireToUI(doc: RulesDocumentWire): RulesDocumentUI {
   return {
-    schema_version: doc.schema_version >= 5 ? doc.schema_version : 5,
+    schema_version: Math.max(doc.schema_version, 6),
     rules: (doc.rules ?? []).map((r) => ruleWireToUI(r)),
   };
 }
@@ -164,8 +177,9 @@ export function uiToWire(doc: RulesDocumentUI): RulesDocumentWire {
     });
 
   return {
-    schema_version: 5,
+    schema_version: 6,
     rules: doc.rules.map((r) => ({
+      target: r.target,
       id: r.id,
       enabled: r.enabled,
       priority: r.priority,

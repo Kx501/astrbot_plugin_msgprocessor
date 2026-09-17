@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
 """HTTP API；静态页需先在前端目录执行 ``npm run build``。"""
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .engine import process_message
+from .injection import InjectionContext, process_request, validate_request_rules
 
 _PKG = Path(__file__).resolve().parent
 _REPO_ROOT = _PKG.parent
@@ -24,10 +25,14 @@ class ProcessBody(BaseModel):
     message: str = Field(..., min_length=0, max_length=2_000_000)
     rules: dict | None = None
     rule_ids: list[str] | None = None
+    target: Literal["outbound", "llm_request"] = "outbound"
+    system_prompt: str = ""
+    context: dict[str, str] = Field(default_factory=dict)
+    daily_dates: dict[str, str] = Field(default_factory=dict)
 
 
 class RulesDocument(BaseModel):
-    schema_version: int = 5
+    schema_version: int = 6
     rules: list
 
 
@@ -82,6 +87,10 @@ def create_app(
 
     @app.post("/api/rules/{name}")
     def save_rules(name: str, body: RulesDocument) -> dict:
+        try:
+            validate_request_rules(body.model_dump())
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(400, str(exc)) from exc
         base = Path(name).name
         fname = base if base.endswith(".json") else f"{base}.json"
         path = (dd / fname).resolve()
@@ -99,6 +108,31 @@ def create_app(
                 doc = body.rules
             else:
                 doc = _read_rules_json("rules.json")
+            validate_request_rules(doc)
+            if body.target == "llm_request":
+                context = InjectionContext(**{
+                    key: value for key, value in body.context.items()
+                    if key in InjectionContext.__dataclass_fields__
+                })
+                injected = process_request(
+                    doc, body.message, body.system_prompt, context,
+                    daily_dates=body.daily_dates, rule_ids=body.rule_ids,
+                )
+                return {
+                    "schema_version": 1,
+                    "input": body.message,
+                    "segments": [{"type": "plain", "text": injected.prompt}],
+                    "effects": [], "dropped": False,
+                    "unchanged": not injected.blocks,
+                    "output": injected.prompt,
+                    "request": {
+                        "prompt": injected.prompt,
+                        "system_prompt": injected.system_prompt,
+                        "parts": injected.parts,
+                        "blocks": injected.blocks,
+                        "daily_dates": injected.daily_dates,
+                    },
+                }
             result = process_message(doc, body.message, meta={}, rule_ids=body.rule_ids)
         except HTTPException:
             raise

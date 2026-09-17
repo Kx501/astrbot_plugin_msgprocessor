@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """规则引擎：按 priority 依次执行各规则的扁平 pipeline。"""
 from __future__ import annotations
 
@@ -6,7 +5,12 @@ from typing import Any
 
 from .models import ProcessResult, ProcessSegment
 from .segment_markers import parse_segment_marker
-from .steps import RuleExecContext, normalize_rule_pipeline, run_rule_pipeline, run_rule_pipeline_async
+from .steps import (
+    RuleExecContext,
+    normalize_rule_pipeline,
+    run_rule_pipeline,
+    run_rule_pipeline_async,
+)
 
 ProcessOutput = str | list[str] | None
 
@@ -28,7 +32,7 @@ def _rules_from_doc(rules_doc: dict[str, Any], *, rule_ids: list[str] | None = N
     rules = rules_doc.get("rules")
     if not isinstance(rules, list):
         return []
-    items = [r for r in rules if isinstance(r, dict)]
+    items = [r for r in rules if isinstance(r, dict) and r.get("target", "outbound") == "outbound"]
     if rule_ids:
         id_set = {str(rid) for rid in rule_ids if str(rid).strip()}
         items = [r for r in items if str(r.get("id", "")) in id_set]

@@ -1,4 +1,4 @@
-import type { ProcessResponseWire, RulesDocumentUI, RulesDocumentWire, TestScope } from "./types";
+import type { ProcessResponseWire, RulesDocumentUI, RulesDocumentWire, TestScope, RuleTarget } from "./types";
 import { uiToWire } from "./types";
 
 async function errBody(r: Response): Promise<string> {
@@ -26,7 +26,7 @@ export async function saveRules(name: string, doc: RulesDocumentUI): Promise<{ s
 export async function processMessage(
   message: string,
   doc: RulesDocumentUI,
-  options?: { scope?: TestScope; selectedRuleId?: string },
+  options?: { scope?: TestScope; selectedRuleId?: string; target?: RuleTarget; systemPrompt?: string; context?: Record<string, string>; dailyDates?: Record<string, string> },
 ): Promise<ProcessResponseWire> {
   const rules = uiToWire(doc);
   const scope = options?.scope ?? "all";
@@ -37,7 +37,7 @@ export async function processMessage(
   const r = await fetch("/api/process", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, rules, rule_ids: ruleIds }),
+    body: JSON.stringify({ message, rules, rule_ids: ruleIds, target: options?.target ?? "outbound", system_prompt: options?.systemPrompt ?? "", context: options?.context ?? {}, daily_dates: options?.dailyDates ?? {} }),
   });
   if (!r.ok) throw new Error(`测试请求失败：${await errBody(r)}`);
   return r.json() as Promise<ProcessResponseWire>;

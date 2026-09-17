@@ -28,7 +28,8 @@ import {
   UI,
   moduleLabel,
 } from "../i18n-ui";
-import type { PipelineStepUI, WindowAnchor } from "../types";
+import type { PipelineStepUI, WindowAnchor, RuleTarget } from "../types";
+import { InjectionFields } from "./InjectionFields";
 import { newKey, normalizePipelineLabels } from "../types";
 
 const MODULE_VALUES = new Set(MODULE_OPTIONS.map((o) => o.value));
@@ -163,6 +164,9 @@ function guardDefaults(op: string): Record<string, unknown> {
 }
 
 export function defaultConfig(mid: string): Record<string, unknown> {
+  if (mid === "inject") {
+    return { state_id: newKey(), position: "message_end", template: "", schedule: "always", ephemeral: false, when: { chat: "any" } };
+  }
   switch (mid) {
     case "replace":
       return { from: "", to: "", regex: false, regex_flags: "" };
@@ -536,11 +540,13 @@ function LocateConfigFields({
 }
 
 function SortableRow({
+  target,
   step,
   pipeline,
   onChange,
   onRemove,
 }: {
+  target: RuleTarget;
   step: PipelineStepUI;
   pipeline: PipelineStepUI[];
   onChange: (s: PipelineStepUI) => void;
@@ -573,7 +579,7 @@ function SortableRow({
             {typeof step.id === "string" && !MODULE_VALUES.has(step.id) && (
               <option value={step.id}>{moduleLabel(step.id)}</option>
             )}
-            {MODULE_GROUPS.map((g) => (
+            {(target === "llm_request" ? [{ id: "llm_request", label: "LLM 请求" }] : MODULE_GROUPS).map((g) => (
               <optgroup key={g.id} label={g.label}>
                 {MODULE_OPTIONS.filter((o) => o.group === g.id).map((o) => (
                   <option key={o.value} value={o.value}>
@@ -582,7 +588,7 @@ function SortableRow({
                 ))}
               </optgroup>
             ))}
-            {MODULE_OPTIONS.filter((o) => !o.group).map((o) => (
+            {MODULE_OPTIONS.filter((o) => !o.group && target === "outbound").map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -620,6 +626,8 @@ function ModuleConfigFields({
     onChange({ ...step, config: { ...step.config, ...patch } });
 
   switch (step.id) {
+    case "inject":
+      return <InjectionFields config={c} onChange={set} />;
     case "replace":
       return (
         <div className="pipeline-config-grid">
@@ -1109,9 +1117,11 @@ function GuardConfigFields({
 }
 
 export function PipelineEditor({
+  target,
   pipeline,
   onChange,
 }: {
+  target: RuleTarget;
   pipeline: PipelineStepUI[];
   onChange: (p: PipelineStepUI[]) => void;
 }) {
@@ -1132,7 +1142,7 @@ export function PipelineEditor({
   };
 
   const add = () => {
-    const mid = "noop";
+    const mid = target === "llm_request" ? "inject" : "noop";
     emit([...pipeline, { _key: newKey(), id: mid, label: "", config: defaultConfig(mid) }]);
   };
 
@@ -1149,6 +1159,7 @@ export function PipelineEditor({
           <div className="pipeline-list">
             {pipeline.map((step, i) => (
               <SortableRow
+                target={target}
                 key={step._key}
                 step={step}
                 pipeline={pipeline}
