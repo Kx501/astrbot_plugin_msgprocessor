@@ -27,11 +27,7 @@
 
 测试区随当前规则分类切换。LLM 请求预览可填写 System、用户信息、群 ID、会话和时区，并展示用户消息、System 和附加内容。测试计次仅保留在页面内，点击「重置测试计次」可重新预览首次请求，不影响真实会话。
 
-### 从 InfoInjection 迁移
-
-在规则列表下方选择「导入 InfoInjection 规则」，上传旧插件数据目录中的 `rules.json`，然后保存。旧规则转为「LLM 请求」下的「注入」步骤；与现有规则重名时自动添加后缀。
-
-导入完成后停用旧 InfoInjection，避免两个插件重复注入。旧插件文件与状态不会删除；旧每日计次不迁移，新插件从首次执行重新计次。导入保留条件、模板、频率、位置和优先级，但多个注入步骤采用上述顺序执行语义，不沿用旧插件批量前插排序和只选择最高优先级替换的行为。
+旧 InfoInjection 规则导入入口已移除，已导入的规则仍可在「LLM 请求」分类中编辑，无需再次迁移。请保持旧 InfoInjection 插件停用，避免重复注入。
 
 ## 功能
 
@@ -47,10 +43,14 @@
 
 1. 将本仓库作为插件目录放入 AstrBot 的插件路径（或按平台说明安装）。
 2. 在插件根目录安装 Python 依赖：`pip install -r requirements.txt`（或与 AstrBot 共用环境时安装所列包）。
-3. 若要使用 Web 配置台：在 `web/` 下执行 `npm install`、`npm run build`，生成 `web/dist/`。
-4. 启动 AstrBot 并启用插件。首次运行会在插件数据目录下准备 `**rules.json`**（可由仓库里的 `sample_rules.json` 初始化）。
+3. 源码安装时，在 `web/` 下执行 `npm install`、`npm run build`，生成 `pages/settings/index.html` 及资源文件。页面产物必须随插件一起发布；只有前端源码时，AstrBot 不会显示 Page 入口。
+4. 启动 AstrBot 并启用插件，在「插件 → MsgProcessor → 规则配置」打开页面。首次运行会在插件数据目录下准备 `rules.json`（可由仓库里的 `sample_rules.json` 初始化）。新增 Pages 后需要重载插件。
 
-可选：将 `sample_config.json` 复制为数据目录下的 `**config.json`** 作为 Web 相关底稿；翻译模型与提示词由 AstrBot 配置界面写入同一文件（或框架存储），与样本无关。另支持 `**process_messages**`（默认真，可不写）：为假则本条插件不处理待发文本。
+需要支持插件 Pages 和 `astrbot.api.web` 的 AstrBot 版本。页面通过 AstrBot bridge 访问插件接口，沿用 Dashboard 登录身份，主题跟随 AstrBot。
+
+旧入口 `http://127.0.0.1:5878` → 新入口「AstrBot WebUI → 插件 → MsgProcessor → 规则配置」。不再启动独立 Web 服务，`web_enabled`、`web_host`、`web_port` 已移除；旧配置文件中的这些字段会被忽略。已有 `rules.json`、其他配置和每日计次数据继续使用，不需要重新导入。
+
+可选：将 `sample_config.json` 复制为数据目录下的 `config.json` 作为运行时配置底稿；翻译模型与提示词仍由 AstrBot 插件配置界面设置。另支持 `process_messages`（默认真，可不写）：为假则不处理待发文本，不影响 LLM 请求注入。
 
 ## 数据文件（插件数据目录）
 
@@ -63,17 +63,17 @@
 
 仓库根的 `**sample_rules.json**`、`**sample_config.json**` 仅作示例，可随版本更新。
 
-## 本地独立运行（开发 / 调试）
+## 前端开发
 
-不启动 AstrBot 时调试 API 与静态页：
+前端源码仍位于 `web/`，构建目标为插件 Pages：
 
 ```bash
-pip install -e .
-cd web && npm install && npm run build && cd ..
-python -m core.server
+cd web
+npm install
+npm run build
 ```
 
-默认使用仓库下 `**data/**`（已在 `.gitignore` 中忽略），其中放入或生成 `rules.json` 即可试跑。
+构建后从 AstrBot 打开「规则配置」。页面依赖宿主 bridge，不再提供独立后端；直接打开 Vite 开发地址不能读写规则。修改静态资源后刷新 Page，新增 Page 后重载插件。`web/dist/` 为旧构建目录，不再用于运行或发布。
 
 ## 项目结构（概要）
 
@@ -84,16 +84,17 @@ python -m core.server
 ├── sample_rules.json
 ├── sample_config.json
 ├── requirements.txt
-├── pyproject.toml
-├── core/                   # 核心引擎、规则执行、HTTP 服务
+├── .astrbot-plugin/i18n/   # Pages 标题与说明
+├── pages/settings/         # 前端构建生成的插件页面
+├── core/                   # 核心引擎、规则执行、Pages API
 └── web/                    # 配置台前端（Vite + React）
 ```
 
-若在其他 Python 代码中集成，可使用 `from core.engine import process_text` 等（需正确设置包路径或已 `pip install -e .`）。
+若在其他 Python 代码中集成，可使用 `from core.engine import process_text` 等（需正确设置包路径）。
 
 ## 技术栈
 
-- **后端**：Python 3.10+，`fastapi`、`uvicorn`
+- **后端**：Python 3.10+，AstrBot Web API、Pydantic
 - **前端**：TypeScript、React、Vite
 
 ---

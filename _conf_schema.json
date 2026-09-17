@@ -1,20 +1,4 @@
 {
-  "web_enabled": {
-    "description": "启用 Web 配置台",
-    "type": "bool",
-    "default": true,
-    "hint": "在数据目录旁启动静态页与规则接口，便于浏览器编辑 rules.json。"
-  },
-  "web_host": {
-    "description": "Web 监听地址",
-    "type": "string",
-    "default": "127.0.0.1"
-  },
-  "web_port": {
-    "description": "Web 端口",
-    "type": "int",
-    "default": 5878
-  },
   "translate_llm": {
     "description": "选择提供商",
     "_special": "select_provider",

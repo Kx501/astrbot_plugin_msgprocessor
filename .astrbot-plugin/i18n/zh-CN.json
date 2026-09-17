@@ -1,0 +1,8 @@
+{
+  "pages": {
+    "settings": {
+      "title": "规则配置",
+      "description": "编辑 LLM 请求、消息发送规则并预览效果。"
+    }
+  }
+}

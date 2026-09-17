@@ -3,8 +3,7 @@ import { fetchRules, saveRules } from "./api";
 import { PipelineEditor, defaultConfig } from "./components/PipelineEditor";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { TestBench } from "./components/TestBench";
-import { ThemeToggle } from "./components/ThemeToggle";
-import { InjectionImport } from "./components/InjectionImport";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { UI } from "./i18n-ui";
 import type { RuleUI, RulesDocumentUI, RuleTarget } from "./types";
 import { newKey, wireToUI } from "./types";
@@ -42,12 +41,13 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState(0);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<{ message: string; action: () => void } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const w = await fetchRules("rules.json");
+        const w = await fetchRules();
         if (!cancelled) {
           setDoc(wireToUI(w));
           setLoadError(null);
@@ -83,7 +83,7 @@ export default function App() {
     if (!doc) return;
     setSaveMsg(null);
     try {
-      const r = await saveRules("rules.json", doc);
+      const r = await saveRules(doc);
       setSaveMsg(UI.savedOk(r.saved));
     } catch (e) {
       setSaveMsg(e instanceof Error ? e.message : String(e));
@@ -99,9 +99,7 @@ export default function App() {
           <h1 className="error-state__title">{UI.loadFailed}</h1>
           <p className="error">{loadError}</p>
           <p className="muted error-state__hint">
-            {UI.startBackend} <code className="code-inline">python -m core.server</code>
-            <br />
-            或在 AstrBot 中加载本插件后，由插件按配置启动 Web 服务。
+            请确认插件已启用，并从 AstrBot 插件详情页重新打开配置页。
           </p>
         </div>
       </div>
@@ -129,7 +127,6 @@ export default function App() {
               <p className="muted header__subtitle">{headerSubtitleContent(UI.appSubtitle)}</p>
             </div>
           </div>
-          <ThemeToggle />
         </div>
       </header>
 
@@ -166,17 +163,6 @@ export default function App() {
             ))}
           </ul>
           <div className="stack sidebar-actions">
-            <InjectionImport onImport={(rules) => {
-              const ids = new Set(doc.rules.map((r) => r.id));
-              for (const imported of rules) {
-                const base = imported.id;
-                let suffix = 1;
-                while (ids.has(imported.id)) imported.id = `${base}_${suffix++}`;
-                ids.add(imported.id);
-              }
-              setDoc({ ...doc, rules: [...doc.rules, ...rules] });
-              setSelected(doc.rules.length);
-            }} />
             <button type="button" className="btn btn-primary btn-block" onClick={() => void saveEditor()}>
               {UI.saveFile}
             </button>
@@ -202,10 +188,11 @@ export default function App() {
                     type="button"
                     className="btn btn-ghost btn-danger-ghost main-head__delete"
                     onClick={() => {
-                      if (!confirm(UI.deleteConfirm)) return;
-                      const next = doc.rules.filter((_, i) => i !== selected);
-                      setDoc({ ...doc, rules: next });
-                      setSelected(Math.max(0, selected - 1));
+                      setConfirmation({ message: UI.deleteConfirm, action: () => {
+                        const next = doc.rules.filter((_, i) => i !== selected);
+                        setDoc({ ...doc, rules: next });
+                        setSelected(Math.max(0, selected - 1));
+                      } });
                     }}
                   >
                     {UI.deleteRule}
@@ -226,9 +213,13 @@ export default function App() {
                   <span className="label-text">分类</span>
                   <select value={rule.target} onChange={(e) => {
                     const target = e.target.value as RuleTarget;
-                    if (rule.pipeline.some((step) => step.id !== "noop") && !confirm("切换分类会清空当前规则的模块配置。是否继续？")) return;
                     const id = target === "llm_request" ? "inject" : "noop";
-                    updateRule({ target, pipeline: [{ _key: newKey(), id, label: "s1", config: defaultConfig(id) }] });
+                    const action = () => updateRule({ target, pipeline: [{ _key: newKey(), id, label: "s1", config: defaultConfig(id) }] });
+                    if (rule.pipeline.some((step) => step.id !== "noop")) {
+                      setConfirmation({ message: "切换分类会清空当前规则的模块配置。是否继续？", action });
+                    } else {
+                      action();
+                    }
                   }}>
                     <option value="outbound">消息发送</option>
                     <option value="llm_request">LLM 请求</option>
@@ -283,6 +274,9 @@ export default function App() {
 
       <footer className="app-footer muted">{UI.footer}</footer>
       <ScrollToTop />
+      {confirmation && <ConfirmDialog message={confirmation.message}
+        onCancel={() => setConfirmation(null)}
+        onConfirm={() => { confirmation.action(); setConfirmation(null); }} />}
     </div>
   );
 }

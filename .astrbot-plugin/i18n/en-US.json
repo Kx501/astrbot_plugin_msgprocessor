@@ -1,0 +1,8 @@
+{
+  "pages": {
+    "settings": {
+      "title": "Rule settings",
+      "description": "Edit and preview LLM request and outgoing message rules."
+    }
+  }
+}

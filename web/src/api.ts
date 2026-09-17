@@ -1,26 +1,31 @@
 import type { ProcessResponseWire, RulesDocumentUI, RulesDocumentWire, TestScope, RuleTarget } from "./types";
 import { uiToWire } from "./types";
 
-async function errBody(r: Response): Promise<string> {
-  const t = await r.text();
-  return t.trim() || `HTTP ${r.status}`;
+interface PluginPageBridge {
+  ready(): Promise<unknown>;
+  apiGet<T>(endpoint: string): Promise<T>;
+  apiPost<T>(endpoint: string, body: unknown): Promise<T>;
 }
 
-export async function fetchRules(name: string): Promise<RulesDocumentWire> {
-  const r = await fetch(`/api/rules/${encodeURIComponent(name)}`);
-  if (!r.ok) throw new Error(`加载失败：${await errBody(r)}`);
-  return r.json() as Promise<RulesDocumentWire>;
+declare global {
+  interface Window {
+    AstrBotPluginPage?: PluginPageBridge;
+  }
 }
 
-export async function saveRules(name: string, doc: RulesDocumentUI): Promise<{ saved: string }> {
-  const body = uiToWire(doc);
-  const r = await fetch(`/api/rules/${encodeURIComponent(name)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!r.ok) throw new Error(`保存失败：${await errBody(r)}`);
-  return r.json() as Promise<{ saved: string }>;
+async function getBridge(): Promise<PluginPageBridge> {
+  const bridge = window.AstrBotPluginPage;
+  if (!bridge) throw new Error("请从 AstrBot 插件详情页打开 MsgProcessor 配置页。");
+  await bridge.ready();
+  return bridge;
+}
+
+export async function fetchRules(): Promise<RulesDocumentWire> {
+  return (await getBridge()).apiGet<RulesDocumentWire>("rules");
+}
+
+export async function saveRules(doc: RulesDocumentUI): Promise<{ saved: string }> {
+  return (await getBridge()).apiPost<{ saved: string }>("rules/save", uiToWire(doc));
 }
 
 export async function processMessage(
@@ -34,11 +39,11 @@ export async function processMessage(
     scope === "selected" && options?.selectedRuleId?.trim()
       ? [options.selectedRuleId.trim()]
       : undefined;
-  const r = await fetch("/api/process", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, rules, rule_ids: ruleIds, target: options?.target ?? "outbound", system_prompt: options?.systemPrompt ?? "", context: options?.context ?? {}, daily_dates: options?.dailyDates ?? {} }),
+  return (await getBridge()).apiPost<ProcessResponseWire>("process", {
+    message, rules, rule_ids: ruleIds,
+    target: options?.target ?? "outbound",
+    system_prompt: options?.systemPrompt ?? "",
+    context: options?.context ?? {},
+    daily_dates: options?.dailyDates ?? {},
   });
-  if (!r.ok) throw new Error(`测试请求失败：${await errBody(r)}`);
-  return r.json() as Promise<ProcessResponseWire>;
 }

@@ -1291,3 +1291,12 @@ textarea {
   opacity: 0.7;
   margin-top: 0.3rem;
 }
+.confirm-dialog {
+  width: min(440px, calc(100vw - 40px));
+  padding: 24px;
+  color: inherit;
+}
+
+.confirm-dialog::backdrop {
+  background: rgb(0 0 0 / 45%);
+}

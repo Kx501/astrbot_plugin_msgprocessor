@@ -1,15 +1,13 @@
-"""AstrBot 入口：插件类须位于 main.py。仅处理待发消息纯文本。"""
+"""AstrBot entry point for request injection, outgoing messages and Pages."""
 
 from __future__ import annotations
 
 import asyncio
 import json
 import shutil
-import threading
 from pathlib import Path
 from typing import Any
 
-import uvicorn
 from astrbot.api import logger as ab_logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.message_components import Image, Plain
@@ -24,11 +22,10 @@ from .core.loader import load_rules_from_path
 from .core.modules import review_llm_fallback, translate_llm_fallback
 from .core.outbound import plain_char_count, send_follow_ups
 from .core.prompts import render_llm_prompt, resolve_step_prompt
-from .core.server import create_app
+from .core.page import PageAPI
 
 _ROOT = Path(__file__).resolve().parent
 _SAMPLE_RULES = _ROOT / "sample_rules.json"
-_WEB_DIST = _ROOT / "web" / "dist"
 
 _send_patched = False
 _star_ref: Any = None
@@ -162,10 +159,7 @@ class MsgProcessorStar(Star):
         )
         self._rules_mtime: float | None = None
         self._rules_cache: dict[str, Any] | None = None
-        self._uvicorn_server: uvicorn.Server | None = None
-        self._uvicorn_thread: threading.Thread | None = None
-        if self._cfg.get("web_enabled", True):
-            self._start_web()
+        self._page_api = PageAPI(context, self._rules_path)
         _patch_send(self)
 
     def _init_rules(self) -> None:
@@ -197,29 +191,12 @@ class MsgProcessorStar(Star):
         self._rules_cache = doc
         return doc
 
-    def _start_web(self) -> None:
-        host = str(self._cfg.get("web_host") or "127.0.0.1")
-        try:
-            port = int(self._cfg.get("web_port") or 5878)
-        except (TypeError, ValueError):
-            port = 5878
-        try:
-            app = create_app(data_dir=self._data_dir, web_dist=_WEB_DIST)
-            config = uvicorn.Config(app, host=host, port=port, access_log=False)
-            self._uvicorn_server = uvicorn.Server(config)
-            self._uvicorn_thread = threading.Thread(target=self._uvicorn_server.run, daemon=True)
-            self._uvicorn_thread.start()
-            ab_logger.info("MsgProcessor: Web 配置台 http://%s:%s/", host, port)
-        except Exception:
-            ab_logger.exception("MsgProcessor: Web 启动失败")
-
     async def terminate(self) -> None:
-        if self._uvicorn_server is not None:
-            self._uvicorn_server.should_exit = True
-            th = self._uvicorn_thread
-            if th is not None and th.is_alive():
-                await asyncio.to_thread(th.join, 3.0)
-        ab_logger.info("MsgProcessor 已停止")
+        self.context.registered_web_apis[:] = [
+            api for api in self.context.registered_web_apis
+            if getattr(api[1], "__self__", None) is not self._page_api
+        ]
+        ab_logger.info("MsgProcessor stopped")
         _unpatch_send()
 
     async def _split_chain(

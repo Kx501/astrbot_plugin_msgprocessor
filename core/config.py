@@ -11,9 +11,6 @@ from .outbound import DelayPolicy, parse_delay_policy
 
 def defaults() -> dict[str, Any]:
     return {
-        "web_enabled": True,
-        "web_host": "127.0.0.1",
-        "web_port": 5878,
         "process_messages": True,
         "translate_llm": "default",
         "llm_translate_prompt": "请将以下文本翻译，只输出译文，不要解释。",
@@ -55,17 +52,6 @@ def load_config(data_dir: Path, *, on_error: Any = None) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return base
 
-    if "web_enabled" in raw:
-        base["web_enabled"] = bool(raw["web_enabled"])
-    if isinstance(raw.get("web_host"), str) and raw["web_host"].strip():
-        base["web_host"] = raw["web_host"].strip()
-    if "web_port" in raw:
-        try:
-            p = int(raw["web_port"])
-            if 1 <= p <= 65535:
-                base["web_port"] = p
-        except (TypeError, ValueError):
-            pass
     if "process_messages" in raw:
         base["process_messages"] = bool(raw["process_messages"])
     if isinstance(raw.get("translate_llm"), str):
@@ -105,8 +91,6 @@ def build_config(
     except (TypeError, ValueError):
         return cfg
     for key in defaults():
-        if key.startswith("web_"):
-            continue
         if key in src:
             cfg[key] = src[key]
     return cfg

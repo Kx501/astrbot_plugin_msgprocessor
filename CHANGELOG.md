@@ -1,8 +1,12 @@
-# Changelog
+# 更新日志
 
-## Unreleased
+## 1.5.0
 
-- Add the `LLM 请求` rule category with an `注入` module for request templates, conditions, positions and per-step daily scheduling.
-- Keep existing rules in `消息发送` by default. The existing rule editor remains in place; its former sending-only scope is now the `消息发送` category. Module groups remain `通用` and `标记`.
-- Add InfoInjection rule import and request previews. Imported rules use sequential module execution; existing daily state is not migrated.
-- Preserve MsgDebugger injection tracing and isolate LLM request rules from outgoing message rules.
+- 将配置页迁入 AstrBot Pages，入口由独立地址 `http://127.0.0.1:5878` 调整为「AstrBot WebUI → 插件 → MsgProcessor → 规则配置」。
+- 规则读取、保存和预览改用 AstrBot bridge 与插件 Web API，移除独立 Web 服务和监听地址、端口配置。
+- 页面主题跟随 AstrBot，删除规则和切换分类使用页面内确认弹窗，适配 Pages 的 iframe 环境。
+- 新增「LLM 请求」分类与「注入」模块，支持模板变量、注入位置、生效条件及按会话、步骤独立每日计次。
+- 旧规则默认归入「消息发送」，模块下拉保留「通用」「标记」分组；两类规则独立执行。
+- 新增请求预览和独立测试计次，保留 MsgDebugger 注入追踪。
+- 完成旧规则迁移后移除 InfoInjection 一次性导入入口，保留已导入规则与每日状态。
+- 前端构建目标调整为 `pages/settings/`，使用相对静态资源路径；已有规则数据无需再次迁移。
