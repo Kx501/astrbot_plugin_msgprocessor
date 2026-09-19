@@ -14,6 +14,7 @@ from astrbot.api.message_components import Image, Plain
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, StarTools
 from astrbot.core.agent.message import TextPart
+from astrbot.core.exceptions import EmptyModelOutputError
 
 from .core.config import build_config, parse_delay_policy
 from .core.engine import process_message_async
@@ -280,6 +281,13 @@ class MsgProcessorStar(Star):
             resp = await ctx.llm_generate(chat_provider_id=pid, prompt=prompt)
             out = (getattr(resp, "completion_text", None) or "").strip()
             return out or None
+        except EmptyModelOutputError as e:
+            ab_logger.warning(
+                "MsgProcessor: LLM 空输出，回退原文 (%s): %s",
+                provider_key,
+                e,
+            )
+            return None
         except Exception:
             ab_logger.exception("MsgProcessor: LLM 调用失败 (%s)", provider_key)
             return None
